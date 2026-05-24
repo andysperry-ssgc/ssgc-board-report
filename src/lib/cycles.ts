@@ -1,4 +1,4 @@
-import { sql } from '@vercel/postgres'
+import { sql } from '@/lib/db'
 import type { Cycle, Submission, SubmissionStatus } from '@/types'
 import { TEAM_MEMBERS } from './team'
 

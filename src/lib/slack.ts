@@ -1,5 +1,5 @@
 import { WebClient } from '@slack/web-api'
-import { sql } from '@vercel/postgres'
+import { sql } from '@/lib/db'
 import type { SlackMessageType, SubmissionStatus } from '@/types'
 import { TEAM_MEMBERS } from './team'
 

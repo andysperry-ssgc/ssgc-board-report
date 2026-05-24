@@ -1,5 +1,17 @@
-import { sql } from '@vercel/postgres'
-export { sql }
+import { neon } from '@neondatabase/serverless'
+
+const connectionString = process.env.POSTGRES_URL ?? process.env.DATABASE_URL ?? ''
+const _sql = neon(connectionString)
+
+// Compatibility shim — wraps Neon (which returns rows directly) to match
+// the { rows } shape that @vercel/postgres used, so no other files need changing.
+export async function sql<T = Record<string, unknown>>(
+  strings: TemplateStringsArray,
+  ...values: unknown[]
+): Promise<{ rows: T[] }> {
+  const rows = (await _sql(strings, ...values)) as T[]
+  return { rows }
+}
 
 export async function initDb() {
   await sql`
@@ -63,17 +75,16 @@ export async function initDb() {
     )
   `
 
-  // Seed default settings if not present
   await sql`
     INSERT INTO settings (key, value) VALUES
-      ('submission_url', 'https://yourapp.vercel.app'),
+      ('submission_url', 'https://ssgc-board-report.vercel.app'),
       ('cycle_label', 'Biweekly Update')
     ON CONFLICT (key) DO NOTHING
   `
 }
 
 export async function getSetting(key: string): Promise<string | null> {
-  const result = await sql`SELECT value FROM settings WHERE key = ${key}`
+  const result = await sql<{ value: string }>`SELECT value FROM settings WHERE key = ${key}`
   return result.rows[0]?.value ?? null
 }
 
