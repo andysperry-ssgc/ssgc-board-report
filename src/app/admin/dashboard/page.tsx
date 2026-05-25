@@ -73,7 +73,8 @@ export default function Dashboard() {
       {showNewCycle && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
           <div className="card w-full max-w-md p-6">
-            <h2 className="text-base font-semibold text-gray-900 mb-4">Open new cycle</h2>
+            <h2 className="text-base font-semibold text-gray-900 mb-1">Open new cycle</h2>
+            <p className="text-xs text-gray-400 mb-4">All times are CT (Central Time)</p>
             <form onSubmit={handleCreateCycle} className="space-y-4">
               <div>
                 <label className="label">Cycle label</label>
