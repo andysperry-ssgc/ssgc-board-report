@@ -48,8 +48,8 @@ export default function AdminArchivePage() {
         report: allReports.find((r) => r.cycle_id === c.id),
       }))
 
-      // Past cycles only (current cycle is handled by Dashboard)
-      setCycles(cyclesWithReports.filter((c) => !c.is_current))
+      // All cycles, current first — a report can be saved while the cycle is still active
+      setCycles(cyclesWithReports)
 
       // Reports with no cycle (manually uploaded historical reports)
       setStandaloneReports(allReports.filter((r) => r.cycle_id === null))
@@ -212,9 +212,13 @@ export default function AdminArchivePage() {
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-gray-900 truncate">{c.label}</p>
                             <p className="text-xs text-gray-400">
-                              Closed {new Date(c.closes_at).toLocaleDateString('en-US', {
-                                month: 'short', day: 'numeric', year: 'numeric',
-                              })}
+                              {c.is_current ? (
+                                <span className="text-brand-600 font-medium">Current cycle</span>
+                              ) : (
+                                <>Closed {new Date(c.closes_at).toLocaleDateString('en-US', {
+                                  month: 'short', day: 'numeric', year: 'numeric',
+                                })}</>
+                              )}
                             </p>
                           </div>
                         </button>

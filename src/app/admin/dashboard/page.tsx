@@ -35,11 +35,28 @@ export default function Dashboard() {
   async function load() {
     setLoading(true)
     try {
-      const res = await fetch('/api/submissions')
-      const data = await res.json()
-      setCycle(data.cycle)
-      setSubmissions(data.submissions ?? [])
-      setStatuses(data.statuses ?? [])
+      const [subRes, reportRes] = await Promise.all([
+        fetch('/api/submissions'),
+        fetch('/api/reports'),
+      ])
+      const subData = await subRes.json()
+      const reportData = await reportRes.json()
+
+      const currentCycle = subData.cycle ?? null
+      setCycle(currentCycle)
+      setSubmissions(subData.submissions ?? [])
+      setStatuses(subData.statuses ?? [])
+
+      // Pre-load any existing report for the current cycle
+      if (currentCycle) {
+        const existing = (reportData.reports ?? []).find(
+          (r: { cycle_id: number; content: string }) => r.cycle_id === currentCycle.id
+        )
+        if (existing) {
+          setReportContent(existing.content)
+          setSaved(true)
+        }
+      }
     } finally {
       setLoading(false)
     }
