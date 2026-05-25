@@ -1,178 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import type { Cycle } from '@/types'
+import { buildPrintHtml, fetchLogoBase64 } from '@/lib/report-html'
 
-// Convert the plain-text report (with markdown-style formatting) to clean HTML for printing
-function reportToHtml(text: string): string {
-  const lines = text.split('\n')
-  let html = ''
-  let inBulletList = false
+function GeneratePageInner() {
+  const searchParams = useSearchParams()
+  const urlCycleId = searchParams.get('cycle_id') ? Number(searchParams.get('cycle_id')) : null
 
-  for (let i = 0; i < lines.length; i++) {
-    let line = lines[i]
-
-    // Close bullet list if needed
-    if (inBulletList && !line.trim().startsWith('•') && !line.trim().startsWith('*  ') && line.trim() !== '') {
-      html += '</ul>'
-      inBulletList = false
-    }
-
-    // Bold headers: **text** as standalone line → h2
-    if (/^\*\*(.+)\*\*$/.test(line.trim())) {
-      const heading = line.trim().replace(/^\*\*/, '').replace(/\*\*$/, '')
-      html += `<h2>${escHtml(heading)}</h2>`
-      continue
-    }
-
-    // Italic sub-headers: *text* as standalone line → h3
-    if (/^\*([^*]+)\*$/.test(line.trim())) {
-      const heading = line.trim().replace(/^\*/, '').replace(/\*$/, '')
-      html += `<h3>${escHtml(heading)}</h3>`
-      continue
-    }
-
-    // Bullet lines starting with • or *
-    if (/^[•\*]\s/.test(line.trim())) {
-      if (!inBulletList) {
-        html += '<ul>'
-        inBulletList = true
-      }
-      const item = line.trim().replace(/^[•\*]\s/, '')
-      html += `<li>${renderInline(item)}</li>`
-      continue
-    }
-
-    // Blank line
-    if (line.trim() === '') {
-      html += ''
-      continue
-    }
-
-    // Regular paragraph — render inline formatting
-    html += `<p>${renderInline(line)}</p>`
-  }
-
-  if (inBulletList) html += '</ul>'
-  return html
-}
-
-function renderInline(text: string): string {
-  return escHtml(text)
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*([^*]+?)\*/g, '<em>$1</em>')
-}
-
-function escHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-
-function buildPrintHtml(period: string, content: string): string {
-  const bodyHtml = reportToHtml(content)
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>${period} — SafeSpace Global Board Report</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: Inter, -apple-system, sans-serif;
-      color: #111;
-      font-size: 10.5pt;
-      line-height: 1.6;
-      padding: 48px 60px;
-      max-width: 800px;
-      margin: 0 auto;
-    }
-    .header {
-      border-bottom: 2px solid #111;
-      padding-bottom: 16px;
-      margin-bottom: 24px;
-    }
-    .header-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-    }
-    .company-name {
-      font-size: 18pt;
-      font-weight: 700;
-      letter-spacing: -0.5px;
-      color: #111;
-    }
-    .company-tagline {
-      font-size: 8.5pt;
-      color: #666;
-      margin-top: 2px;
-    }
-    .report-meta {
-      text-align: right;
-      font-size: 8.5pt;
-      color: #555;
-      line-height: 1.5;
-    }
-    .confidential {
-      font-size: 8pt;
-      color: #888;
-      font-style: italic;
-      margin-top: 12px;
-      border-top: 1px solid #eee;
-      padding-top: 8px;
-    }
-    h2 {
-      font-size: 11pt;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: #111;
-      margin-top: 24px;
-      margin-bottom: 8px;
-      padding-bottom: 4px;
-      border-bottom: 1px solid #ddd;
-    }
-    h3 {
-      font-size: 10pt;
-      font-weight: 600;
-      color: #333;
-      margin-top: 14px;
-      margin-bottom: 4px;
-    }
-    p { margin-bottom: 8px; }
-    ul {
-      padding-left: 18px;
-      margin-bottom: 10px;
-    }
-    li {
-      margin-bottom: 4px;
-    }
-    @page { margin: 0.75in; }
-    @media print {
-      body { padding: 0; }
-    }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="header-top">
-      <div>
-        <div class="company-name">SafeSpace Global</div>
-        <div class="company-tagline">Biweekly Business Summary &nbsp;·&nbsp; ${escHtml(period)}</div>
-      </div>
-      <div class="report-meta">
-        Reporting Period: ${escHtml(period)}<br>
-        Generated: ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-      </div>
-    </div>
-    <div class="confidential">Confidential – Internal Use Only. This report may contain material nonpublic information. Do not distribute or trade on this information.</div>
-  </div>
-  ${bodyHtml}
-</body>
-</html>`
-}
-
-export default function GeneratePage() {
   const [period, setPeriod] = useState('')
   const [type, setType] = useState<'weekly' | 'biweekly'>('biweekly')
   const [content, setContent] = useState('')
@@ -180,9 +17,8 @@ export default function GeneratePage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
-  const [cycle, setCycle] = useState<Cycle | null>(null)
   const [allCycles, setAllCycles] = useState<Cycle[]>([])
-  const [selectedCycleId, setSelectedCycleId] = useState<number | null>(null)
+  const [selectedCycleId, setSelectedCycleId] = useState<number | null>(urlCycleId)
 
   useEffect(() => {
     Promise.all([
@@ -191,19 +27,23 @@ export default function GeneratePage() {
     ]).then(([subData, cycleData]) => {
       const cycles: Cycle[] = cycleData.cycles ?? []
       setAllCycles(cycles)
-      if (subData.cycle) {
-        setCycle(subData.cycle)
+
+      // URL param takes priority, then current cycle from submissions API
+      if (urlCycleId) {
+        const c = cycles.find(c => c.id === urlCycleId)
+        if (c) { setPeriod(c.label); setType(c.type) }
+      } else if (subData.cycle) {
+        setSelectedCycleId(subData.cycle.id)
         setPeriod(subData.cycle.label)
         setType(subData.cycle.type)
-        setSelectedCycleId(subData.cycle.id)
       } else if (cycles.length > 0) {
         const latest = cycles[0]
+        setSelectedCycleId(latest.id)
         setPeriod(latest.label)
         setType(latest.type)
-        setSelectedCycleId(latest.id)
       }
     }).catch(() => {})
-  }, [])
+  }, [urlCycleId])
 
   function handleCycleSelect(cycleId: number) {
     const c = allCycles.find(c => c.id === cycleId)
@@ -259,10 +99,11 @@ export default function GeneratePage() {
     }
   }
 
-  function handlePrint() {
+  async function handlePrint() {
+    const logo = await fetchLogoBase64()
     const win = window.open('', '_blank')
     if (!win) return
-    win.document.write(buildPrintHtml(period, content))
+    win.document.write(buildPrintHtml(period, content, logo))
     win.document.close()
     setTimeout(() => win.print(), 600)
   }
@@ -271,7 +112,12 @@ export default function GeneratePage() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold text-gray-900 mb-6">Generate report</h1>
+      <div className="flex items-center gap-3 mb-6">
+        <Link href="/admin/archive" className="text-xs text-gray-400 hover:text-gray-600">
+          ← Archive
+        </Link>
+        <h1 className="text-xl font-semibold text-gray-900">Generate report</h1>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Controls */}
@@ -279,7 +125,7 @@ export default function GeneratePage() {
           <div className="card p-4 space-y-4">
 
             {/* Cycle selector */}
-            {allCycles.length > 1 && (
+            {allCycles.length > 0 && (
               <div>
                 <label className="label">Cycle</label>
                 <select
@@ -355,7 +201,7 @@ export default function GeneratePage() {
               >
                 {saving ? 'Saving…' : saved ? '✓ Saved to archive' : 'Save to archive'}
               </button>
-              {content && !saved && (
+              {!saved && (
                 <p className="text-xs text-amber-600 text-center">Not yet saved to archive</p>
               )}
             </div>
@@ -402,5 +248,13 @@ export default function GeneratePage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function GeneratePage() {
+  return (
+    <Suspense fallback={<div className="text-sm text-gray-500">Loading…</div>}>
+      <GeneratePageInner />
+    </Suspense>
   )
 }

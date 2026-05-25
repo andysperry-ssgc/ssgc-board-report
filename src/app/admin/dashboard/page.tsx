@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import type { Cycle, Submission, SubmissionStatus } from '@/types'
 import { TEAM_MEMBERS } from '@/lib/team'
+import { buildPrintHtml, fetchLogoBase64 } from '@/lib/report-html'
 
 export default function Dashboard() {
   const [cycle, setCycle] = useState<Cycle | null>(null)
@@ -10,6 +11,8 @@ export default function Dashboard() {
   const [statuses, setStatuses] = useState<SubmissionStatus[]>([])
   const [expanded, setExpanded] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // New cycle modal
   const [showNewCycle, setShowNewCycle] = useState(false)
   const [cycleForm, setCycleForm] = useState({
     label: '',
@@ -19,6 +22,13 @@ export default function Dashboard() {
   })
   const [cycleError, setCycleError] = useState('')
   const [cycleLoading, setCycleLoading] = useState(false)
+
+  // Generate panel
+  const [generating, setGenerating] = useState(false)
+  const [reportContent, setReportContent] = useState('')
+  const [generateError, setGenerateError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
 
   useEffect(() => { load() }, [])
 
@@ -57,12 +67,72 @@ export default function Dashboard() {
     }
   }
 
+  async function handleGenerate() {
+    if (!cycle) return
+    setGenerating(true)
+    setGenerateError('')
+    setSaved(false)
+    setReportContent('')
+    try {
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period: cycle.label, type: cycle.type, cycle_id: cycle.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Generation failed')
+      setReportContent(data.content)
+      // Scroll to the generate section
+      setTimeout(() => {
+        document.getElementById('generate-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 100)
+    } catch (err) {
+      setGenerateError(err instanceof Error ? err.message : 'Generation failed')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  async function handleSave() {
+    if (!reportContent.trim() || !cycle) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          period: cycle.label,
+          type: cycle.type,
+          content: reportContent,
+          cycle_id: cycle.id,
+          source: 'generated',
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to save')
+      setSaved(true)
+    } catch (err) {
+      setGenerateError(err instanceof Error ? err.message : 'Save failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handlePrint() {
+    const logo = await fetchLogoBase64()
+    const win = window.open('', '_blank')
+    if (!win || !cycle) return
+    win.document.write(buildPrintHtml(cycle.label, reportContent, logo))
+    win.document.close()
+    setTimeout(() => win.print(), 600)
+  }
+
   const submitted = statuses.filter((s) => s.submitted).length
   const total = statuses.length
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
         <button onClick={() => setShowNewCycle(true)} className="btn-primary text-sm">
           + New cycle
@@ -133,7 +203,7 @@ export default function Dashboard() {
       {loading ? (
         <div className="text-sm text-gray-500">Loading…</div>
       ) : (
-        <div className="space-y-6">
+        <>
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <Stat label="Current cycle" value={cycle?.label ?? 'None'} />
@@ -149,14 +219,14 @@ export default function Dashboard() {
             />
           </div>
 
-          {/* Submission cards */}
+          {/* Submissions */}
           {!cycle ? (
             <div className="card p-6 text-center text-sm text-gray-500">
               No active cycle. Create one to get started.
             </div>
           ) : (
             <div>
-              <h2 className="text-sm font-semibold text-gray-700 mb-3">Submissions</h2>
+              <h2 className="text-sm font-semibold text-gray-700 mb-3">Submissions — {cycle.label}</h2>
               <div className="space-y-2">
                 {TEAM_MEMBERS.map((member) => {
                   const status = statuses.find((s) => s.name === member.name)
@@ -215,7 +285,77 @@ export default function Dashboard() {
               </div>
             </div>
           )}
-        </div>
+
+          {/* Generate report panel */}
+          {cycle && (
+            <div id="generate-panel" className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-gray-700">Generate report — {cycle.label}</h2>
+                {reportContent && (
+                  <div className="flex items-center gap-2">
+                    <button onClick={handlePrint} className="btn-secondary text-xs">
+                      Download PDF
+                    </button>
+                    <button
+                      onClick={handleSave}
+                      disabled={saving || saved}
+                      className="btn-primary text-xs"
+                    >
+                      {saving ? 'Saving…' : saved ? '✓ Saved to archive' : 'Save to archive'}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {generateError && (
+                <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+                  {generateError}
+                </div>
+              )}
+
+              {reportContent ? (
+                <div className="space-y-2">
+                  {!saved && (
+                    <p className="text-xs text-amber-600">Not yet saved to archive — save when ready.</p>
+                  )}
+                  <textarea
+                    className="textarea font-mono text-xs min-h-[500px]"
+                    value={reportContent}
+                    onChange={(e) => { setReportContent(e.target.value); setSaved(false) }}
+                  />
+                </div>
+              ) : (
+                <div className="card p-6 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">
+                      {generating ? 'Generating report…' : 'Ready to generate'}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {generating
+                        ? 'This takes 15–30 seconds.'
+                        : `Using ${submitted} of ${total} submissions from ${cycle.label}`}
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleGenerate}
+                    disabled={generating}
+                    className="btn-primary text-sm flex-shrink-0"
+                  >
+                    {generating ? (
+                      <span className="flex items-center gap-2">
+                        <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        Generating…
+                      </span>
+                    ) : 'Generate report'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   )

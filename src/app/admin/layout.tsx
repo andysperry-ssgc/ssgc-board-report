@@ -6,10 +6,8 @@ import Link from 'next/link'
 
 const TABS = [
   { href: '/admin/dashboard', label: 'Dashboard' },
-  { href: '/admin/submissions', label: 'Submissions' },
-  { href: '/admin/reminders', label: 'Reminders' },
-  { href: '/admin/generate', label: 'Generate' },
   { href: '/admin/archive', label: 'Archive' },
+  { href: '/admin/reminders', label: 'Reminders' },
   { href: '/admin/settings', label: 'Settings' },
 ]
 
