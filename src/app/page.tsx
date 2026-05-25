@@ -33,9 +33,10 @@ export default function HomePage() {
   }
 
   function handleSuccess(submission: Submission) {
-    // Refresh scoreboard after successful submission
     fetchStatus()
   }
+
+  const isClosed = cycle ? new Date() > new Date(cycle.closes_at) : false
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -61,40 +62,62 @@ export default function HomePage() {
                 </div>
               </div>
             ) : (
-              <Scoreboard statuses={statuses} cycle={cycle} />
+              <Scoreboard statuses={statuses} cycle={cycle} isClosed={isClosed} />
             )}
           </div>
 
-          {/* Right: Name picker + form */}
+          {/* Right: content area */}
           <div className="lg:col-span-2 space-y-4">
-            {/* Name picker */}
-            <div className="card p-4">
-              <label className="label">Who are you?</label>
-              <select
-                className="input"
-                value={selectedName}
-                onChange={(e) => setSelectedName(e.target.value)}
-              >
-                <option value="">— Select your name —</option>
-                {TEAM_MEMBERS.map((m) => (
-                  <option key={m.name} value={m.name}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-            </div>
 
-            {/* Form or prompt */}
-            {selectedName ? (
-              <SubmissionForm
-                key={selectedName}
-                personName={selectedName}
-                onSuccess={handleSuccess}
-              />
-            ) : (
-              <div className="card p-8 text-center">
-                <p className="text-sm text-gray-500">Select your name above to submit your update.</p>
+            {/* Closed banner */}
+            {!loading && isClosed && (
+              <div className="card p-6 border-gray-200 bg-gray-50 text-center space-y-2">
+                <p className="text-sm font-semibold text-gray-700">Submissions are closed</p>
+                <p className="text-sm text-gray-500">
+                  The {cycle?.label} submission window has ended.
+                  The report is being prepared and will be distributed shortly.
+                </p>
               </div>
+            )}
+
+            {/* No cycle */}
+            {!loading && !cycle && (
+              <div className="card p-8 text-center">
+                <p className="text-sm text-gray-500">No active submission cycle. Check back soon.</p>
+              </div>
+            )}
+
+            {/* Active cycle — name picker + form */}
+            {!loading && cycle && !isClosed && (
+              <>
+                <div className="card p-4">
+                  <label className="label">Who are you?</label>
+                  <select
+                    className="input"
+                    value={selectedName}
+                    onChange={(e) => setSelectedName(e.target.value)}
+                  >
+                    <option value="">— Select your name —</option>
+                    {TEAM_MEMBERS.map((m) => (
+                      <option key={m.name} value={m.name}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {selectedName ? (
+                  <SubmissionForm
+                    key={selectedName}
+                    personName={selectedName}
+                    onSuccess={handleSuccess}
+                  />
+                ) : (
+                  <div className="card p-8 text-center">
+                    <p className="text-sm text-gray-500">Select your name above to submit your update.</p>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

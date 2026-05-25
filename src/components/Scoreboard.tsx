@@ -5,9 +5,10 @@ import type { SubmissionStatus, Cycle } from '@/types'
 interface Props {
   statuses: SubmissionStatus[]
   cycle: Cycle | null
+  isClosed?: boolean
 }
 
-export default function Scoreboard({ statuses, cycle }: Props) {
+export default function Scoreboard({ statuses, cycle, isClosed = false }: Props) {
   const submitted = statuses.filter((s) => s.submitted)
   const pending = statuses.filter((s) => !s.submitted)
   const total = statuses.length
@@ -92,9 +93,15 @@ export default function Scoreboard({ statuses, cycle }: Props) {
       )}
 
       {/* Deadline */}
-      {deadlineDisplay && !allIn && (
+      {deadlineDisplay && !allIn && !isClosed && (
         <div className="pt-3 border-t border-gray-100 text-xs text-gray-500">
           Deadline: <span className="font-medium text-gray-700">{deadlineDisplay}</span>
+        </div>
+      )}
+
+      {isClosed && !allIn && (
+        <div className="pt-3 border-t border-gray-100 text-xs text-gray-500 font-medium">
+          Submissions closed
         </div>
       )}
 
