@@ -24,19 +24,48 @@ export default function SubmissionForm({ personName, onSuccess }: Props) {
   const [error, setError] = useState('')
   const [submitted, setSubmitted] = useState<Submission | null>(null)
   const [previousSub, setPreviousSub] = useState<Submission | null>(null)
-  const [loadingPrev, setLoadingPrev] = useState(false)
+  const [existingSub, setExistingSub] = useState<Submission | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState(false)
 
-  // Load previous submission when person changes
+  // Load current cycle submission + previous cycle submission when person changes
   useEffect(() => {
     if (!personName) return
-    setLoadingPrev(true)
-    fetch(`/api/submissions/previous?person=${encodeURIComponent(personName)}`)
-      .then((r) => r.json())
-      .then((data) => {
-        setPreviousSub(data.previous ?? null)
-      })
-      .catch(() => {})
-      .finally(() => setLoadingPrev(false))
+    setLoading(true)
+    setSubmitted(null)
+    setExistingSub(null)
+    setPreviousSub(null)
+    setEditing(false)
+
+    Promise.all([
+      fetch(`/api/submissions/current?person=${encodeURIComponent(personName)}`).then(r => r.json()),
+      fetch(`/api/submissions/previous?person=${encodeURIComponent(personName)}`).then(r => r.json()),
+    ]).then(([currentData, prevData]) => {
+      const current = currentData.submission ?? null
+      setExistingSub(current)
+      setPreviousSub(prevData.previous ?? null)
+
+      if (current) {
+        // Pre-fill form with existing submission
+        setHeadline(current.headline ?? '')
+        setProgress(current.progress ?? '')
+        setRisks(current.risks ?? '')
+        setMetrics(current.metrics ?? '')
+        setBoardUpdate(current.board_update ?? '')
+        setFocus(current.focus ?? '')
+        setPriorities(current.priorities ?? '')
+        setSubmitted(current)
+      } else {
+        // Clear form for new submission
+        setHeadline('')
+        setProgress('')
+        setRisks('')
+        setMetrics('')
+        setBoardUpdate('')
+        setFocus('')
+        setPriorities('')
+      }
+    }).catch(() => {}).finally(() => setLoading(false))
   }, [personName])
 
   function applyDraft(fields: DraftFields) {
@@ -75,6 +104,8 @@ export default function SubmissionForm({ personName, onSuccess }: Props) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Submission failed')
       setSubmitted(data.submission)
+      setExistingSub(data.submission)
+      setEditing(false)
       onSuccess(data.submission)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Submission failed')
@@ -83,24 +114,58 @@ export default function SubmissionForm({ personName, onSuccess }: Props) {
     }
   }
 
-  if (submitted) {
-    return <SaveCopyPanel submission={submitted} />
+  if (loading) {
+    return (
+      <div className="card p-6 animate-pulse space-y-3">
+        <div className="h-4 bg-gray-200 rounded w-1/3" />
+        <div className="h-10 bg-gray-200 rounded" />
+        <div className="h-20 bg-gray-200 rounded" />
+      </div>
+    )
   }
+
+  // Show save-a-copy panel when submitted and not editing
+  if (submitted && !editing) {
+    return (
+      <div className="space-y-3">
+        <SaveCopyPanel submission={submitted} />
+        <div className="flex justify-end">
+          <button
+            onClick={() => setEditing(true)}
+            className="btn-secondary text-sm"
+          >
+            Edit submission
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const isUpdate = !!existingSub
 
   return (
     <div className="space-y-4">
       {/* Draft assistant */}
       <DraftAssistant personName={personName} onDraft={applyDraft} />
 
-      {/* Previous submission reference */}
-      {!loadingPrev && previousSub && (
+      {/* Previous cycle submission reference */}
+      {previousSub && (
         <PreviousSubmission submission={previousSub} />
       )}
 
       {/* Main form */}
       <form onSubmit={handleSubmit} className="card p-6 space-y-5">
         <div>
-          <h2 className="text-base font-semibold text-gray-900 mb-0.5">Your update — {personName}</h2>
+          <div className="flex items-center justify-between mb-0.5">
+            <h2 className="text-base font-semibold text-gray-900">
+              {isUpdate ? 'Update your submission' : 'Your update'} — {personName}
+            </h2>
+            {isUpdate && (
+              <span className="text-xs text-green-600 bg-green-50 border border-green-200 rounded px-2 py-0.5">
+                Previously submitted
+              </span>
+            )}
+          </div>
           <p className="text-xs text-gray-500">Required fields are marked with *</p>
         </div>
 
@@ -196,17 +261,26 @@ export default function SubmissionForm({ personName, onSuccess }: Props) {
           </div>
         )}
 
-        <div className="flex justify-end pt-1">
-          <button type="submit" disabled={submitting} className="btn-primary">
+        <div className="flex items-center justify-between pt-1">
+          {editing && (
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="btn-ghost text-sm"
+            >
+              Cancel
+            </button>
+          )}
+          <button type="submit" disabled={submitting} className="btn-primary ml-auto">
             {submitting ? (
               <span className="flex items-center gap-2">
                 <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                Submitting…
+                Saving…
               </span>
-            ) : 'Submit update'}
+            ) : isUpdate ? 'Update submission' : 'Submit update'}
           </button>
         </div>
       </form>
