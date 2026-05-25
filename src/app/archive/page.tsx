@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Nav from '@/components/Nav'
 import type { Report } from '@/types'
+import { buildPrintHtml, fetchLogoBase64 } from '@/lib/report-html'
 
 export default function ArchivePage() {
   const [reports, setReports] = useState<Report[]>([])
@@ -16,39 +17,13 @@ export default function ArchivePage() {
       .finally(() => setLoading(false))
   }, [])
 
-  function handlePrint(report: Report) {
+  async function handlePrint(report: Report) {
+    const logo = await fetchLogoBase64()
     const win = window.open('', '_blank')
     if (!win) return
-    win.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>${report.period} — SafeSpace Global Board Report</title>
-          <style>
-            body { font-family: Georgia, serif; max-width: 750px; margin: 40px auto; color: #111; line-height: 1.6; font-size: 11pt; }
-            h1 { font-size: 16pt; margin-bottom: 4pt; }
-            h2 { font-size: 12pt; margin-top: 24pt; margin-bottom: 6pt; border-bottom: 1px solid #ccc; padding-bottom: 4pt; }
-            .meta { color: #555; font-size: 9pt; margin-bottom: 24pt; }
-            ul { padding-left: 20pt; }
-            li { margin-bottom: 4pt; }
-            p { margin-bottom: 10pt; }
-            .confidential { font-size: 8pt; color: #888; font-style: italic; margin-bottom: 16pt; }
-          </style>
-        </head>
-        <body>
-          <pre style="white-space:pre-wrap;font-family:Georgia,serif">${escapeHtml(report.content)}</pre>
-        </body>
-      </html>
-    `)
+    win.document.write(buildPrintHtml(report.period, report.content, logo))
     win.document.close()
-    setTimeout(() => win.print(), 500)
-  }
-
-  function escapeHtml(str: string) {
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
+    setTimeout(() => win.print(), 600)
   }
 
   return (
