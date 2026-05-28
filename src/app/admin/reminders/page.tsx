@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import type { SlackMessageType } from '@/types'
-import { DEFAULT_TEMPLATES } from '@/lib/slack'
+import { DEFAULT_TEMPLATES } from '@/lib/slack-templates'
 
 interface MessagePreview {
   type: SlackMessageType

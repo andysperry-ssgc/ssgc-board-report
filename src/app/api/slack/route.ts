@@ -6,10 +6,8 @@ import {
   postSlackMessage,
   recordMessageSent,
   hasMessageBeenSent,
-  DEFAULT_TEMPLATES,
-  renderTemplate,
-  getTemplateVars,
 } from '@/lib/slack'
+import { DEFAULT_TEMPLATES, renderTemplate, getTemplateVars } from '@/lib/slack-templates'
 import type { SlackMessageType } from '@/types'
 
 const TEMPLATE_KEY = (type: SlackMessageType) => `slack_msg_${type}`
