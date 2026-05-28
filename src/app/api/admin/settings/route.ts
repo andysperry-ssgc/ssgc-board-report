@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAllSettings, setSetting } from '@/lib/db'
+import { getAllSettings, setSetting, deleteSetting } from '@/lib/db'
 import { requireAdmin, getAdminPassword } from '@/lib/auth'
 
 export async function GET() {
@@ -39,5 +39,22 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error('POST /api/admin/settings error:', err)
     return NextResponse.json({ error: 'Failed to save setting' }, { status: 500 })
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const isAdmin = await requireAdmin()
+    if (!isAdmin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const { searchParams } = new URL(req.url)
+    const key = searchParams.get('key')
+    if (!key) return NextResponse.json({ error: 'Missing key' }, { status: 400 })
+    await deleteSetting(key)
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    console.error('DELETE /api/admin/settings error:', err)
+    return NextResponse.json({ error: 'Failed to delete setting' }, { status: 500 })
   }
 }

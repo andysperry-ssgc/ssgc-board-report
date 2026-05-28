@@ -95,6 +95,10 @@ export async function setSetting(key: string, value: string): Promise<void> {
   `
 }
 
+export async function deleteSetting(key: string): Promise<void> {
+  await sql`DELETE FROM settings WHERE key = ${key}`
+}
+
 export async function getAllSettings(): Promise<Record<string, string>> {
   const result = await sql`SELECT key, value FROM settings`
   return Object.fromEntries(result.rows.map((r) => [r.key, r.value]))

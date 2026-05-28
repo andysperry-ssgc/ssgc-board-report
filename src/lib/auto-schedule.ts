@@ -96,11 +96,12 @@ export function getCloseTime(monday: Date): Date {
  * Example: opens June 1 → May 16 – 29
  */
 export function buildAutoLabel(openMonday: Date): string {
+  // Use noon UTC so CT timezone display never rolls back to the previous day
   const start = new Date(Date.UTC(
-    openMonday.getUTCFullYear(), openMonday.getUTCMonth(), openMonday.getUTCDate() - 16,
+    openMonday.getUTCFullYear(), openMonday.getUTCMonth(), openMonday.getUTCDate() - 16, 12,
   ))
   const end = new Date(Date.UTC(
-    openMonday.getUTCFullYear(), openMonday.getUTCMonth(), openMonday.getUTCDate() - 3,
+    openMonday.getUTCFullYear(), openMonday.getUTCMonth(), openMonday.getUTCDate() - 3, 12,
   ))
 
   const tz = 'America/Chicago'
@@ -130,6 +131,7 @@ export function getUpcomingCycleDates(count: number, from: Date = new Date()): D
   for (let i = 0; i < count; i++) {
     const d = new Date(FIRST_OPEN_DATE)
     d.setUTCDate(d.getUTCDate() + (startPeriod + i) * 14)
+    d.setUTCHours(12, 0, 0, 0) // noon UTC — safe for CT timezone display (no midnight rollback)
     results.push(d)
   }
   return results
