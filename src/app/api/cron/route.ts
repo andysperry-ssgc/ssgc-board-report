@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentCycle, getSubmissionStatus, allSubmitted, createCycle } from '@/lib/cycles'
 import { getSetting } from '@/lib/db'
-import { isScheduledCycleMonday, getOpenTime, getCloseTime, buildAutoLabel } from '@/lib/auto-schedule'
+import {
+  isScheduledCycleMonday,
+  getOpenTime,
+  getCloseTime,
+  buildAutoLabel,
+  getCTDayHour,
+} from '@/lib/auto-schedule'
 import {
   postSlackMessage,
   recordMessageSent,
@@ -15,18 +21,19 @@ import {
   buildClosedMessage,
 } from '@/lib/slack'
 
-// Biweekly schedule (CT times converted to UTC hours):
-// Mon 08:00 CT = Mon 14:00 UTC → opening
-// Mon 16:00 CT = Mon 22:00 UTC → reminder_1
-// Tue 11:00 CT = Tue 17:00 UTC → reminder_2
-// Tue 16:00 CT = Tue 22:00 UTC → reminder_3
-// Wed 08:00 CT = Wed 14:00 UTC → final_warning
-// Wed 14:00 CT = Wed 20:00 UTC → last_call
-// Wed 22:00 CT = Wed 22:00 UTC → (submissions close — handled by cycle closes_at)
-// Wed 23:00 CT = Wed 23:00 UTC → closed
+// Biweekly Slack schedule — all times CT (DST-aware):
+// Mon  8:00 am → opening
+// Mon  4:00 pm → reminder_1
+// Tue 11:00 am → reminder_2
+// Tue  4:00 pm → reminder_3
+// Wed  8:00 am → final_warning
+// Wed  2:00 pm → last_call
+// Wed  5:00 pm → closed
 
-function matchesSchedule(now: Date, dayOfWeek: number, utcHour: number): boolean {
-  return now.getUTCDay() === dayOfWeek && now.getUTCHours() === utcHour
+/** True when `now` (CT) matches the given CT day-of-week and CT hour. */
+function atCT(now: Date, ctDay: number, ctHour: number): boolean {
+  const { day, hour } = getCTDayHour(now)
+  return day === ctDay && hour === ctHour
 }
 
 export async function GET(req: NextRequest) {
@@ -39,7 +46,7 @@ export async function GET(req: NextRequest) {
   try {
     const now = new Date()
 
-    // Auto-create a new cycle if this is a scheduled Monday and none is active
+    // ── Auto-create cycle ────────────────────────────────────────────────────
     if (isScheduledCycleMonday(now)) {
       const existing = await getCurrentCycle()
       if (!existing) {
@@ -51,101 +58,89 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // ── Guard: need an active cycle ──────────────────────────────────────────
     const cycle = await getCurrentCycle()
     if (!cycle) {
       return NextResponse.json({ message: 'No active cycle' })
+    }
+
+    // ── Guard: only send messages Mon–Wed of the cycle's opening week ────────
+    const cycleOpenDay = Date.UTC(
+      new Date(cycle.opens_at).getUTCFullYear(),
+      new Date(cycle.opens_at).getUTCMonth(),
+      new Date(cycle.opens_at).getUTCDate(),
+    )
+    const nowDay = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+    const daysSinceOpen = Math.floor((nowDay - cycleOpenDay) / 86_400_000)
+    if (daysSinceOpen < 0 || daysSinceOpen > 2) {
+      return NextResponse.json({ message: 'Outside cycle window' })
     }
 
     const statuses = await getSubmissionStatus(cycle.id)
     const submissionUrl = (await getSetting('submission_url')) ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
     const cycleLabel = cycle.label
 
-    // Check if all submitted — send celebration if any reminder not yet sent
+    // ── All submitted → celebrate and cancel remaining ───────────────────────
     if (allSubmitted(statuses)) {
       const celebrationSent = await hasMessageBeenSent(cycle.id, 'celebration')
       if (!celebrationSent) {
         await cancelRemainingMessages(cycle.id)
-        const text = buildCelebrationMessage(statuses)
-        const ts = await postSlackMessage(text)
+        const ts = await postSlackMessage(buildCelebrationMessage(statuses))
         await recordMessageSent(cycle.id, 'celebration', ts)
-        return NextResponse.json({ message: 'Celebration message sent', sent: 'celebration' })
+        return NextResponse.json({ message: 'Celebration sent', sent: 'celebration' })
       }
       return NextResponse.json({ message: 'All submitted, celebration already sent' })
     }
 
-    // Determine which message to send based on current time
-    // Cycle opens on Monday — check if this is a cycle Monday
-    const cycleOpens = new Date(cycle.opens_at)
-    const cycleMonday = new Date(cycleOpens)
-    cycleMonday.setUTCHours(0, 0, 0, 0)
-
-    // Calculate which week day we're in relative to the cycle
-    const daysSinceOpen = Math.floor((now.getTime() - cycleMonday.getTime()) / (1000 * 60 * 60 * 24))
-    if (daysSinceOpen < 0 || daysSinceOpen > 2) {
-      return NextResponse.json({ message: 'Outside cycle window' })
-    }
-
+    // ── Scheduled messages (CT times) ────────────────────────────────────────
     let sent: string | null = null
 
-    // Monday 14:00 UTC (08:00 CT) — opening
-    if (matchesSchedule(now, cycleMonday.getUTCDay(), 14)) {
+    if (atCT(now, 1, 8)) {
+      // Monday 8am — opening
       if (!(await hasMessageBeenSent(cycle.id, 'opening'))) {
-        const text = buildOpeningMessage(cycleLabel, submissionUrl)
-        const ts = await postSlackMessage(text)
+        const ts = await postSlackMessage(buildOpeningMessage(cycleLabel, submissionUrl))
         await recordMessageSent(cycle.id, 'opening', ts)
         sent = 'opening'
       }
-    }
-    // Monday 22:00 UTC (16:00 CT) — reminder_1
-    else if (matchesSchedule(now, cycleMonday.getUTCDay(), 22)) {
+    } else if (atCT(now, 1, 16)) {
+      // Monday 4pm — reminder 1
       if (!(await hasMessageBeenSent(cycle.id, 'reminder_1'))) {
-        const text = buildReminderMessage(cycleLabel, submissionUrl, statuses, 1)
-        const ts = await postSlackMessage(text)
+        const ts = await postSlackMessage(buildReminderMessage(cycleLabel, submissionUrl, statuses, 1))
         await recordMessageSent(cycle.id, 'reminder_1', ts)
         sent = 'reminder_1'
       }
-    }
-    // Tuesday 17:00 UTC (11:00 CT) — reminder_2
-    else if (matchesSchedule(now, (cycleMonday.getUTCDay() + 1) % 7, 17)) {
+    } else if (atCT(now, 2, 11)) {
+      // Tuesday 11am — reminder 2
       if (!(await hasMessageBeenSent(cycle.id, 'reminder_2'))) {
-        const text = buildReminderMessage(cycleLabel, submissionUrl, statuses, 2)
-        const ts = await postSlackMessage(text)
+        const ts = await postSlackMessage(buildReminderMessage(cycleLabel, submissionUrl, statuses, 2))
         await recordMessageSent(cycle.id, 'reminder_2', ts)
         sent = 'reminder_2'
       }
-    }
-    // Tuesday 22:00 UTC (16:00 CT) — reminder_3
-    else if (matchesSchedule(now, (cycleMonday.getUTCDay() + 1) % 7, 22)) {
+    } else if (atCT(now, 2, 16)) {
+      // Tuesday 4pm — reminder 3
       if (!(await hasMessageBeenSent(cycle.id, 'reminder_3'))) {
-        const text = buildReminderMessage(cycleLabel, submissionUrl, statuses, 3)
-        const ts = await postSlackMessage(text)
+        const ts = await postSlackMessage(buildReminderMessage(cycleLabel, submissionUrl, statuses, 3))
         await recordMessageSent(cycle.id, 'reminder_3', ts)
         sent = 'reminder_3'
       }
-    }
-    // Wednesday 14:00 UTC (08:00 CT) — final_warning
-    else if (matchesSchedule(now, (cycleMonday.getUTCDay() + 2) % 7, 14)) {
+    } else if (atCT(now, 3, 8)) {
+      // Wednesday 8am — final warning
       if (!(await hasMessageBeenSent(cycle.id, 'final_warning'))) {
-        const text = buildFinalWarningMessage(cycleLabel, submissionUrl, statuses)
-        const ts = await postSlackMessage(text)
+        const ts = await postSlackMessage(buildFinalWarningMessage(cycleLabel, submissionUrl, statuses))
         await recordMessageSent(cycle.id, 'final_warning', ts)
         sent = 'final_warning'
       }
-    }
-    // Wednesday 20:00 UTC (14:00 CT) — last_call
-    else if (matchesSchedule(now, (cycleMonday.getUTCDay() + 2) % 7, 20)) {
+    } else if (atCT(now, 3, 14)) {
+      // Wednesday 2pm — last call
       if (!(await hasMessageBeenSent(cycle.id, 'last_call'))) {
-        const text = buildLastCallMessage(cycleLabel, submissionUrl, statuses)
-        const ts = await postSlackMessage(text)
+        const ts = await postSlackMessage(buildLastCallMessage(cycleLabel, submissionUrl, statuses))
         await recordMessageSent(cycle.id, 'last_call', ts)
         sent = 'last_call'
       }
-    }
-    // Wednesday 23:00 UTC (17:00 CT) — closed/distributed
-    else if (matchesSchedule(now, (cycleMonday.getUTCDay() + 2) % 7, 23)) {
+    } else if (atCT(now, 3, 17)) {
+      // Wednesday 5pm — closed / report distributed
       if (!(await hasMessageBeenSent(cycle.id, 'closed'))) {
-        const text = buildClosedMessage(cycleLabel)
-        const ts = await postSlackMessage(text)
+        const ts = await postSlackMessage(buildClosedMessage(cycleLabel))
         await recordMessageSent(cycle.id, 'closed', ts)
         sent = 'closed'
       }

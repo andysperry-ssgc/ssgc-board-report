@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getUpcomingCycleDates, buildAutoLabel, OPEN_UTC_HOUR, CLOSE_UTC_HOUR } from '@/lib/auto-schedule'
+import { getUpcomingCycleDates, buildAutoLabel, getCloseTime } from '@/lib/auto-schedule'
 
 interface Settings {
   submission_url?: string
@@ -179,7 +179,7 @@ export default function SettingsPage() {
           <div className="space-y-1">
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Upcoming cycles</p>
             {getUpcomingCycleDates(6).map((d) => {
-              const close = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 2, CLOSE_UTC_HOUR))
+              const close = getCloseTime(d)
               const openStr = d.toLocaleDateString('en-US', {
                 timeZone: 'America/Chicago', weekday: 'short', month: 'short', day: 'numeric',
               })

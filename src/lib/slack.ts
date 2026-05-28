@@ -38,7 +38,7 @@ function pendingList(statuses: SubmissionStatus[]): string {
 
 export function buildOpeningMessage(cycleLabel: string, submissionUrl: string): string {
   const tags = TEAM_MEMBERS.map((m) => m.firstName).join(' ')
-  return `📋 *Board report submissions are open — ${cycleLabel}*
+  return `<!channel> 📋 *Board report submissions are open — ${cycleLabel}*
 
 Time to submit your update. Deadline is *Wednesday at 4:00 pm CT*.
 
@@ -55,7 +55,7 @@ export function buildReminderMessage(
   messageNum: 1 | 2 | 3
 ): string {
   const emoji = messageNum === 1 ? '⏰' : messageNum === 2 ? '🔔' : '📣'
-  return `${emoji} *Board report reminder — ${cycleLabel}* (${messageNum} of 3)
+  return `<!channel> ${emoji} *Board report reminder — ${cycleLabel}* (${messageNum} of 3)
 
 ${submittedList(statuses)}
 ${pendingList(statuses)}
@@ -70,7 +70,7 @@ export function buildFinalWarningMessage(
 ): string {
   const pending = statuses.filter((s) => !s.submitted)
   const pendingNames = pending.map((s) => s.name).join(', ')
-  return `🔴 *Final warning — ${cycleLabel}*
+  return `<!channel> 🔴 *Final warning — ${cycleLabel}*
 Submissions close at *4:00 pm CT today* (8 hours).
 
 ${submittedList(statuses)}
@@ -84,7 +84,7 @@ export function buildLastCallMessage(
   submissionUrl: string,
   statuses: SubmissionStatus[]
 ): string {
-  return `🚨 *Last call — 2 hours left! ${cycleLabel}*
+  return `<!channel> 🚨 *Last call — 2 hours left! ${cycleLabel}*
 Submissions close at *4:00 pm CT*.
 
 ${submittedList(statuses)}
