@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { getUpcomingCycleDates, buildAutoLabel, OPEN_UTC_HOUR, CLOSE_UTC_HOUR } from '@/lib/auto-schedule'
 
 interface Settings {
   submission_url?: string
@@ -165,6 +166,35 @@ export default function SettingsPage() {
               {saving === 'admin_password' ? 'Updating…' : 'Update password'}
             </button>
           </form>
+        </div>
+
+        {/* Auto-scheduling */}
+        <div className="card p-5 space-y-3">
+          <h2 className="text-sm font-semibold text-gray-900">Auto-scheduling</h2>
+          <p className="text-xs text-gray-500">
+            Cycles are created automatically every other Monday starting June 1, 2026.
+            The cron job runs hourly — at 9am CT on each scheduled Monday it will open a new cycle
+            if none is active, then immediately post the opening Slack message.
+          </p>
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Upcoming cycles</p>
+            {getUpcomingCycleDates(6).map((d) => {
+              const close = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 2, CLOSE_UTC_HOUR))
+              const openStr = d.toLocaleDateString('en-US', {
+                timeZone: 'America/Chicago', weekday: 'short', month: 'short', day: 'numeric',
+              })
+              const closeStr = close.toLocaleDateString('en-US', {
+                timeZone: 'America/Chicago', weekday: 'short', month: 'short', day: 'numeric',
+              })
+              return (
+                <div key={d.toISOString()} className="flex items-center justify-between text-xs py-1.5 border-b border-gray-100 last:border-0">
+                  <span className="text-gray-700 font-medium">{buildAutoLabel(d)}</span>
+                  <span className="text-gray-400">{openStr} → {closeStr}</span>
+                </div>
+              )
+            })}
+          </div>
+          <p className="text-xs text-gray-400">To skip a cycle, simply create a new one manually on a different schedule — the auto-create step is skipped whenever a cycle is already active.</p>
         </div>
 
         {/* Database init */}

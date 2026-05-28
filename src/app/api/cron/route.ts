@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentCycle, getSubmissionStatus, allSubmitted } from '@/lib/cycles'
+import { getCurrentCycle, getSubmissionStatus, allSubmitted, createCycle } from '@/lib/cycles'
 import { getSetting } from '@/lib/db'
+import { isScheduledCycleMonday, getOpenTime, getCloseTime, buildAutoLabel } from '@/lib/auto-schedule'
 import {
   postSlackMessage,
   recordMessageSent,
@@ -36,12 +37,25 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const now = new Date()
+
+    // Auto-create a new cycle if this is a scheduled Monday and none is active
+    if (isScheduledCycleMonday(now)) {
+      const existing = await getCurrentCycle()
+      if (!existing) {
+        const opensAt  = getOpenTime(now)
+        const closesAt = getCloseTime(now)
+        const label    = buildAutoLabel(now)
+        await createCycle(label, 'biweekly', opensAt, closesAt)
+        console.log(`[cron] Auto-created cycle: ${label}`)
+      }
+    }
+
     const cycle = await getCurrentCycle()
     if (!cycle) {
       return NextResponse.json({ message: 'No active cycle' })
     }
 
-    const now = new Date()
     const statuses = await getSubmissionStatus(cycle.id)
     const submissionUrl = (await getSetting('submission_url')) ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
     const cycleLabel = cycle.label
