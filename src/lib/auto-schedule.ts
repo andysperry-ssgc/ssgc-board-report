@@ -73,13 +73,13 @@ export function getOpenTime(monday: Date): Date {
   ))
 }
 
-/** 4:00 pm CT on the Wednesday of the same cycle week */
+/** 9:00 am CT on the Wednesday of the same cycle week */
 export function getCloseTime(monday: Date): Date {
   const wed = new Date(Date.UTC(
     monday.getUTCFullYear(), monday.getUTCMonth(), monday.getUTCDate() + 2,
   ))
   const offset = getCTOffsetHours(wed) // -5 or -6
-  const utcHour = 16 - offset          // 21 (CDT) or 22 (CST)
+  const utcHour = 9 - offset           // 14 (CDT) or 15 (CST)
   return new Date(Date.UTC(
     wed.getUTCFullYear(), wed.getUTCMonth(), wed.getUTCDate(), utcHour, 0, 0,
   ))

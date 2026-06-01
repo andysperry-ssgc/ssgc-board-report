@@ -173,8 +173,9 @@ export default function SettingsPage() {
           <h2 className="text-sm font-semibold text-gray-900">Auto-scheduling</h2>
           <p className="text-xs text-gray-500">
             Cycles are created automatically every other Monday starting June 1, 2026.
-            The cron job runs hourly — at 9am CT on each scheduled Monday it will open a new cycle
+            The cron job runs hourly — at 8am CT on each scheduled Monday it will open a new cycle
             if none is active, then immediately post the opening Slack message.
+            Submissions close Wednesday at 9:00 am CT.
           </p>
           <div className="space-y-1">
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Upcoming cycles</p>

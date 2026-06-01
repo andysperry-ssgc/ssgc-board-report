@@ -11,7 +11,7 @@ export const DEFAULT_TEMPLATES: Record<SlackMessageType, string> = {
   opening:
 `<!channel> 📋 *Board report submissions are open — {{cycleLabel}}*
 
-Time to submit your update. Deadline is *Wednesday at 4:00 pm CT*.
+Time to submit your update. Deadline is *Wednesday at 9:00 am CT*.
 
 👋 {{teamNames}}
 
@@ -24,7 +24,7 @@ _Report goes out by 5:00 pm Wednesday. Scott will distribute._`,
 {{submittedList}}
 {{pendingList}}
 
-Deadline: *Wednesday 4:00 pm CT* | Submit: {{submissionUrl}}`,
+Deadline: *Wednesday 9:00 am CT* | Submit: {{submissionUrl}}`,
 
   reminder_2:
 `<!channel> 🔔 *Board report reminder — {{cycleLabel}}* (2 of 3)
@@ -32,7 +32,7 @@ Deadline: *Wednesday 4:00 pm CT* | Submit: {{submissionUrl}}`,
 {{submittedList}}
 {{pendingList}}
 
-Deadline: *Wednesday 4:00 pm CT* | Submit: {{submissionUrl}}`,
+Deadline: *Wednesday 9:00 am CT* | Submit: {{submissionUrl}}`,
 
   reminder_3:
 `<!channel> 📣 *Board report reminder — {{cycleLabel}}* (3 of 3)
@@ -40,11 +40,11 @@ Deadline: *Wednesday 4:00 pm CT* | Submit: {{submissionUrl}}`,
 {{submittedList}}
 {{pendingList}}
 
-Deadline: *Wednesday 4:00 pm CT* | Submit: {{submissionUrl}}`,
+Deadline: *Wednesday 9:00 am CT* | Submit: {{submissionUrl}}`,
 
   final_warning:
 `<!channel> 🔴 *Final warning — {{cycleLabel}}*
-Submissions close at *4:00 pm CT today* (8 hours).
+Submissions close at *9:00 am CT today* (2 hours).
 
 {{submittedList}}
 ⏳ *Still needed:* {{pendingNames}}
@@ -53,7 +53,7 @@ Submit now: {{submissionUrl}}`,
 
   last_call:
 `<!channel> 🚨 *Last call — 2 hours left! {{cycleLabel}}*
-Submissions close at *4:00 pm CT*.
+Submissions close at *9:00 am CT*.
 
 {{submittedList}}
 {{pendingList}}

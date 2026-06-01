@@ -26,9 +26,10 @@ import {
 // Mon  4:00 pm → reminder_1
 // Tue 11:00 am → reminder_2
 // Tue  4:00 pm → reminder_3
-// Wed  8:00 am → final_warning
-// Wed  2:00 pm → last_call
-// Wed  5:00 pm → closed
+// Wed  7:00 am → final_warning  (2 hrs before 9am deadline)
+// Wed  8:00 am → last_call      (1 hr before 9am deadline)
+// Wed  9:00 am → submissions close (cycle closes_at)
+// Wed  5:00 pm → closed / report distributed
 
 /** True when `now` (CT) matches the given CT day-of-week and CT hour. */
 function atCT(now: Date, ctDay: number, ctHour: number): boolean {
@@ -123,15 +124,15 @@ export async function GET(req: NextRequest) {
         await recordMessageSent(cycle.id, 'reminder_3', ts)
         sent = 'reminder_3'
       }
-    } else if (atCT(now, 3, 8)) {
-      // Wednesday 8am — final warning
+    } else if (atCT(now, 3, 7)) {
+      // Wednesday 7am — final warning (2 hrs before 9am deadline)
       if (!(await hasMessageBeenSent(cycle.id, 'final_warning'))) {
         const ts = await postSlackMessage(buildFinalWarningMessage(cycleLabel, submissionUrl, statuses))
         await recordMessageSent(cycle.id, 'final_warning', ts)
         sent = 'final_warning'
       }
-    } else if (atCT(now, 3, 14)) {
-      // Wednesday 2pm — last call
+    } else if (atCT(now, 3, 8)) {
+      // Wednesday 8am — last call (1 hr before 9am deadline)
       if (!(await hasMessageBeenSent(cycle.id, 'last_call'))) {
         const ts = await postSlackMessage(buildLastCallMessage(cycleLabel, submissionUrl, statuses))
         await recordMessageSent(cycle.id, 'last_call', ts)

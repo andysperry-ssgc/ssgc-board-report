@@ -17,8 +17,8 @@ const MESSAGE_LABELS: Record<SlackMessageType, string> = {
   reminder_1:    'Mon 4:00 pm — First reminder',
   reminder_2:    'Tue 11:00 am — Second reminder',
   reminder_3:    'Tue 4:00 pm — Third reminder',
-  final_warning: 'Wed 8:00 am — Final warning',
-  last_call:     'Wed 2:00 pm — Last call',
+  final_warning: 'Wed 7:00 am — Final warning',
+  last_call:     'Wed 8:00 am — Last call',
   celebration:   'Early close — Celebration',
   closed:        'Wed 5:00 pm — Report distributed',
 }
