@@ -20,7 +20,7 @@ const MESSAGE_LABELS: Record<SlackMessageType, string> = {
   final_warning: 'Wed 7:00 am — Final warning',
   last_call:     'Wed 8:00 am — Last call',
   celebration:   'Early close — Celebration',
-  closed:        'Wed 5:00 pm — Report distributed',
+  closed:        'Wed 9:00 am — Submissions closed',
 }
 
 const TEMPLATE_VARS = [

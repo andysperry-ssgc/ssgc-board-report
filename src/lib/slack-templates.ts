@@ -65,10 +65,20 @@ Submit: {{submissionUrl}}`,
 
 {{submittedList}}
 
-Thank you all — great work! Report will be distributed by 5:00 pm Wednesday. Scott will distribute.`,
+Thank you all — great work! Report will be distributed by 5:00 pm Wednesday. Carmel will distribute.`,
 
   closed:
-`📊 *{{cycleLabel}} board report is being distributed now.* Scott will distribute.`,
+`📊 *{{cycleLabel}} submissions are now closed.*
+
+Reporting period ended at 9:00 am CT.
+
+{{submittedList}}
+
+Thank you all for your contributions!
+
+{{pendingNames}} — we didn't receive your update this cycle.
+
+Andy is compiling the report and will share it with Dustin, Scott, and Carmel for final review and approval. Carmel will distribute the board report by 5:00 pm CT today.`,
 }
 
 /** Replace {{variable}} placeholders in a template string. */

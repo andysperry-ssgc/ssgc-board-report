@@ -5,6 +5,7 @@ import { TEAM_MEMBERS } from './team'
 
 // Re-export template helpers from the browser-safe module
 export { DEFAULT_TEMPLATES, renderTemplate, getTemplateVars } from './slack-templates'
+import { DEFAULT_TEMPLATES, renderTemplate, getTemplateVars } from './slack-templates'
 
 let slackClient: WebClient | null = null
 
@@ -27,28 +28,16 @@ export async function postSlackMessage(text: string): Promise<string | undefined
   return result.ts as string | undefined
 }
 
-function submittedList(statuses: SubmissionStatus[]): string {
-  const submitted = statuses.filter((s) => s.submitted)
-  if (submitted.length === 0) return '_None yet_'
-  return submitted.map((s) => `✅ ${s.firstName}`).join('  ')
-}
-
-function pendingList(statuses: SubmissionStatus[]): string {
-  const pending = statuses.filter((s) => !s.submitted)
-  if (pending.length === 0) return '_Everyone is in!_'
-  return pending.map((s) => `⏳ ${s.firstName}`).join('  ')
-}
-
 export function buildOpeningMessage(cycleLabel: string, submissionUrl: string): string {
-  const tags = TEAM_MEMBERS.map((m) => m.firstName).join(' ')
-  return `<!channel> 📋 *Board report submissions are open — ${cycleLabel}*
-
-Time to submit your update. Deadline is *Wednesday at 4:00 pm CT*.
-
-👋 ${tags}
-
-Submit here: ${submissionUrl}
-_Report goes out by 5:00 pm Wednesday. Scott will distribute._`
+  const vars = {
+    cycleLabel,
+    submissionUrl,
+    teamNames: TEAM_MEMBERS.map(m => m.firstName).join(' '),
+    submittedList: '',
+    pendingList: '',
+    pendingNames: '',
+  }
+  return renderTemplate(DEFAULT_TEMPLATES.opening, vars)
 }
 
 export function buildReminderMessage(
@@ -57,13 +46,9 @@ export function buildReminderMessage(
   statuses: SubmissionStatus[],
   messageNum: 1 | 2 | 3
 ): string {
-  const emoji = messageNum === 1 ? '⏰' : messageNum === 2 ? '🔔' : '📣'
-  return `<!channel> ${emoji} *Board report reminder — ${cycleLabel}* (${messageNum} of 3)
-
-${submittedList(statuses)}
-${pendingList(statuses)}
-
-Deadline: *Wednesday 4:00 pm CT* | Submit: ${submissionUrl}`
+  const vars = getTemplateVars(cycleLabel, submissionUrl, statuses)
+  const templateKey = `reminder_${messageNum}` as SlackMessageType
+  return renderTemplate(DEFAULT_TEMPLATES[templateKey], vars)
 }
 
 export function buildFinalWarningMessage(
@@ -71,15 +56,8 @@ export function buildFinalWarningMessage(
   submissionUrl: string,
   statuses: SubmissionStatus[]
 ): string {
-  const pending = statuses.filter((s) => !s.submitted)
-  const pendingNames = pending.map((s) => s.name).join(', ')
-  return `<!channel> 🔴 *Final warning — ${cycleLabel}*
-Submissions close at *4:00 pm CT today* (8 hours).
-
-${submittedList(statuses)}
-⏳ *Still needed:* ${pendingNames}
-
-Submit now: ${submissionUrl}`
+  const vars = getTemplateVars(cycleLabel, submissionUrl, statuses)
+  return renderTemplate(DEFAULT_TEMPLATES.final_warning, vars)
 }
 
 export function buildLastCallMessage(
@@ -87,13 +65,8 @@ export function buildLastCallMessage(
   submissionUrl: string,
   statuses: SubmissionStatus[]
 ): string {
-  return `<!channel> 🚨 *Last call — 2 hours left! ${cycleLabel}*
-Submissions close at *4:00 pm CT*.
-
-${submittedList(statuses)}
-${pendingList(statuses)}
-
-Submit: ${submissionUrl}`
+  const vars = getTemplateVars(cycleLabel, submissionUrl, statuses)
+  return renderTemplate(DEFAULT_TEMPLATES.last_call, vars)
 }
 
 export function buildCelebrationMessage(statuses: SubmissionStatus[]): string {
@@ -105,8 +78,13 @@ ${allNames}
 Thank you all — great work! Report will be distributed by 5:00 pm Wednesday. Scott will distribute.`
 }
 
-export function buildClosedMessage(cycleLabel: string): string {
-  return `📊 *${cycleLabel} board report is being distributed now.* Scott will distribute.`
+export function buildClosedMessage(
+  cycleLabel: string,
+  submissionUrl: string,
+  statuses: SubmissionStatus[]
+): string {
+  const vars = getTemplateVars(cycleLabel, submissionUrl, statuses)
+  return renderTemplate(DEFAULT_TEMPLATES.closed, vars)
 }
 
 export async function hasMessageBeenSent(
