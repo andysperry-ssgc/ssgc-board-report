@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentCycle, getSubmissionStatus, allSubmitted, createCycle } from '@/lib/cycles'
+import { getCurrentCycle, getSubmissionStatus, allSubmitted, createCycle, closeCycle } from '@/lib/cycles'
 import { getSetting } from '@/lib/db'
 import {
   isScheduledCycleMonday,
@@ -45,6 +45,13 @@ export async function GET(req: NextRequest) {
 
   try {
     const now = new Date()
+
+    // ── Auto-close expired cycle ─────────────────────────────────────────────
+    const expiredCycle = await getCurrentCycle()
+    if (expiredCycle && now > new Date(expiredCycle.closes_at)) {
+      await closeCycle(expiredCycle.id)
+      console.log(`[cron] Auto-closed expired cycle: ${expiredCycle.label}`)
+    }
 
     // ── Auto-create cycle ────────────────────────────────────────────────────
     if (isScheduledCycleMonday(now)) {
