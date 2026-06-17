@@ -20,48 +20,75 @@ export function reportToHtml(text: string): string {
   let html = ''
   let inBulletList = false
 
+  const closeBulletList = () => {
+    if (inBulletList) { html += '</ul>'; inBulletList = false }
+  }
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
+    const trimmed = line.trim()
 
-    if (inBulletList && !line.trim().startsWith('•') && !line.trim().startsWith('*  ') && line.trim() !== '') {
-      html += '</ul>'
-      inBulletList = false
+    // Close bullet list when we hit a non-bullet non-empty line
+    if (inBulletList && trimmed !== '' && !/^[•\-*]\s/.test(trimmed)) {
+      closeBulletList()
     }
 
-    // **text** as standalone line → h2
-    if (/^\*\*(.+)\*\*$/.test(line.trim())) {
-      const heading = line.trim().replace(/^\*\*/, '').replace(/\*\*$/, '')
-      html += `<h2>${escHtml(heading)}</h2>`
+    // --- horizontal rule → skip (we use h2 border-bottom instead)
+    if (/^---+$/.test(trimmed)) continue
+
+    // # h1 → skip (report title already in header)
+    if (/^#\s/.test(trimmed)) continue
+
+    // ## h2 → section heading
+    if (/^##\s/.test(trimmed)) {
+      closeBulletList()
+      html += `<h2>${escHtml(trimmed.replace(/^##\s+/, ''))}</h2>`
       continue
     }
 
-    // *text* as standalone line → h3
-    if (/^\*([^*]+)\*$/.test(line.trim())) {
-      const heading = line.trim().replace(/^\*/, '').replace(/\*$/, '')
-      html += `<h3>${escHtml(heading)}</h3>`
+    // ### h3 → sub-heading
+    if (/^###\s/.test(trimmed)) {
+      closeBulletList()
+      html += `<h3>${escHtml(trimmed.replace(/^###\s+/, ''))}</h3>`
       continue
     }
 
-    // Bullet lines starting with • or *
-    if (/^[•*]\s/.test(line.trim())) {
-      if (!inBulletList) {
-        html += '<ul>'
-        inBulletList = true
-      }
-      const item = line.trim().replace(/^[•*]\s/, '')
+    // **text** as standalone line → h2 (legacy format)
+    if (/^\*\*(.+)\*\*$/.test(trimmed)) {
+      closeBulletList()
+      html += `<h2>${escHtml(trimmed.replace(/^\*\*/, '').replace(/\*\*$/, ''))}</h2>`
+      continue
+    }
+
+    // *text* as standalone line → h3 (legacy format)
+    if (/^\*([^*]+)\*$/.test(trimmed)) {
+      closeBulletList()
+      html += `<h3>${escHtml(trimmed.replace(/^\*/, '').replace(/\*$/, ''))}</h3>`
+      continue
+    }
+
+    // Bullet lines: •, -, or * followed by space
+    if (/^[•\-*]\s/.test(trimmed)) {
+      if (!inBulletList) { html += '<ul>'; inBulletList = true }
+      const item = trimmed.replace(/^[•\-*]\s/, '')
       html += `<li>${renderInline(item)}</li>`
       continue
     }
 
-    if (line.trim() === '') {
-      html += ''
+    // Numbered list: "1. text"
+    if (/^\d+\.\s/.test(trimmed)) {
+      if (inBulletList) closeBulletList()
+      const item = trimmed.replace(/^\d+\.\s/, '')
+      html += `<p style="margin-left:1.2em;text-indent:-1.2em">${renderInline(trimmed.match(/^(\d+\.)/)?.[1] ?? '')} ${renderInline(item)}</p>`
       continue
     }
+
+    if (trimmed === '') continue
 
     html += `<p>${renderInline(line)}</p>`
   }
 
-  if (inBulletList) html += '</ul>'
+  closeBulletList()
   return html
 }
 
