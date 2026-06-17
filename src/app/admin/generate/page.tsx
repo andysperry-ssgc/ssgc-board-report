@@ -3,8 +3,13 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import type { Cycle } from '@/types'
+import type { Cycle, Submission } from '@/types'
+import { TEAM_MEMBERS } from '@/lib/team'
 import { buildPrintHtml, fetchLogoBase64 } from '@/lib/report-html'
+
+function draftKey(cycleId: number | null) {
+  return `report_draft_${cycleId ?? 'none'}`
+}
 
 function GeneratePageInner() {
   const searchParams = useSearchParams()
@@ -19,7 +24,10 @@ function GeneratePageInner() {
   const [saved, setSaved] = useState(false)
   const [allCycles, setAllCycles] = useState<Cycle[]>([])
   const [selectedCycleId, setSelectedCycleId] = useState<number | null>(urlCycleId)
+  const [submissions, setSubmissions] = useState<Submission[]>([])
+  const [hasDraft, setHasDraft] = useState(false)
 
+  // Load cycles on mount
   useEffect(() => {
     Promise.all([
       fetch('/api/submissions').then(r => r.json()),
@@ -28,7 +36,6 @@ function GeneratePageInner() {
       const cycles: Cycle[] = cycleData.cycles ?? []
       setAllCycles(cycles)
 
-      // URL param takes priority, then current cycle from submissions API
       if (urlCycleId) {
         const c = cycles.find(c => c.id === urlCycleId)
         if (c) { setPeriod(c.label); setType(c.type) }
@@ -45,6 +52,32 @@ function GeneratePageInner() {
     }).catch(() => {})
   }, [urlCycleId])
 
+  // Load submissions and check for draft whenever selected cycle changes
+  useEffect(() => {
+    if (!selectedCycleId) return
+
+    fetch(`/api/submissions?cycle_id=${selectedCycleId}`)
+      .then(r => r.json())
+      .then(data => setSubmissions(data.submissions ?? []))
+      .catch(() => {})
+
+    const draft = localStorage.getItem(draftKey(selectedCycleId))
+    if (draft) {
+      setHasDraft(true)
+      // Only auto-restore if editor is empty
+      setContent(prev => prev || draft)
+    } else {
+      setHasDraft(false)
+    }
+  }, [selectedCycleId])
+
+  // Auto-save draft to localStorage on every content change
+  useEffect(() => {
+    if (!content || !selectedCycleId) return
+    localStorage.setItem(draftKey(selectedCycleId), content)
+    setHasDraft(true)
+  }, [content, selectedCycleId])
+
   function handleCycleSelect(cycleId: number) {
     const c = allCycles.find(c => c.id === cycleId)
     if (c) {
@@ -53,7 +86,20 @@ function GeneratePageInner() {
       setType(c.type)
       setContent('')
       setSaved(false)
+      setError('')
     }
+  }
+
+  function handleRestoreDraft() {
+    const draft = localStorage.getItem(draftKey(selectedCycleId))
+    if (draft) { setContent(draft); setSaved(false) }
+  }
+
+  function handleDiscardDraft() {
+    localStorage.removeItem(draftKey(selectedCycleId))
+    setContent('')
+    setHasDraft(false)
+    setSaved(false)
   }
 
   async function handleGenerate() {
@@ -92,6 +138,9 @@ function GeneratePageInner() {
       })
       if (!res.ok) throw new Error('Failed to save')
       setSaved(true)
+      // Clear draft once officially saved
+      localStorage.removeItem(draftKey(selectedCycleId))
+      setHasDraft(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed')
     } finally {
@@ -109,6 +158,8 @@ function GeneratePageInner() {
   }
 
   const selectedCycle = allCycles.find(c => c.id === selectedCycleId)
+  const submitted = TEAM_MEMBERS.filter(m => submissions.some(s => s.person_name === m.name))
+  const pending = TEAM_MEMBERS.filter(m => !submissions.some(s => s.person_name === m.name))
 
   return (
     <div>
@@ -124,7 +175,6 @@ function GeneratePageInner() {
         <div className="space-y-4">
           <div className="card p-4 space-y-4">
 
-            {/* Cycle selector */}
             {allCycles.length > 0 && (
               <div>
                 <label className="label">Cycle</label>
@@ -189,6 +239,30 @@ function GeneratePageInner() {
             </button>
           </div>
 
+          {/* Submission status */}
+          {selectedCycle && (
+            <div className="card p-4 space-y-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                Submissions — {selectedCycle.label}
+              </p>
+              <div className="space-y-1">
+                {submitted.map(m => (
+                  <div key={m.name} className="flex items-center gap-2 text-xs text-gray-700">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
+                    {m.name}
+                  </div>
+                ))}
+                {pending.map(m => (
+                  <div key={m.name} className="flex items-center gap-2 text-xs text-gray-400">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-300 flex-shrink-0" />
+                    {m.name}
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400">{submitted.length} of {TEAM_MEMBERS.length} submitted</p>
+            </div>
+          )}
+
           {content && (
             <div className="card p-4 space-y-2">
               <button onClick={handlePrint} className="btn-secondary w-full text-sm">
@@ -208,11 +282,27 @@ function GeneratePageInner() {
           )}
         </div>
 
-        {/* Editor / preview */}
+        {/* Editor */}
         <div className="lg:col-span-2">
           {error && (
             <div className="mb-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</div>
           )}
+
+          {/* Draft restore banner */}
+          {hasDraft && !content && (
+            <div className="mb-3 flex items-center justify-between bg-amber-50 border border-amber-200 rounded px-3 py-2">
+              <p className="text-xs text-amber-700">You have an unsaved draft for this cycle.</p>
+              <div className="flex gap-2 ml-3 flex-shrink-0">
+                <button onClick={handleRestoreDraft} className="text-xs text-amber-700 underline hover:text-amber-900">
+                  Restore
+                </button>
+                <button onClick={handleDiscardDraft} className="text-xs text-gray-400 hover:text-gray-600">
+                  Discard
+                </button>
+              </div>
+            </div>
+          )}
+
           {content ? (
             <div className="space-y-2">
               <p className="text-xs text-gray-500">Edit below if needed, then save to archive and/or download PDF.</p>
