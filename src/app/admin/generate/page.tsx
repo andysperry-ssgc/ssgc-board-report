@@ -239,24 +239,6 @@ function GeneratePageInner() {
             </button>
           </div>
 
-          {content && (
-            <div className="card p-4 space-y-2">
-              <button onClick={handlePrint} className="btn-secondary w-full text-sm">
-                Download PDF
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || saved}
-                className="btn-primary w-full text-sm"
-              >
-                {saving ? 'Saving…' : saved ? '✓ Saved to archive' : 'Save to archive'}
-              </button>
-              {!saved && (
-                <p className="text-xs text-amber-600 text-center">Not yet saved to archive</p>
-              )}
-            </div>
-          )}
-
           {/* Submissions — bottom of left rail */}
           {selectedCycle && (
             <div className="card p-4 space-y-3">
@@ -304,13 +286,28 @@ function GeneratePageInner() {
           )}
 
           {content ? (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <p className="text-xs text-gray-500">Edit below if needed, then save to archive and/or download PDF.</p>
               <textarea
                 className="textarea font-mono text-xs min-h-[600px]"
                 value={content}
                 onChange={(e) => { setContent(e.target.value); setSaved(false) }}
               />
+              <div className="flex items-center gap-3 pt-1">
+                <button onClick={handlePrint} className="btn-secondary text-sm">
+                  Download PDF
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving || saved}
+                  className="btn-primary text-sm"
+                >
+                  {saving ? 'Saving…' : saved ? '✓ Saved to archive' : 'Save to archive'}
+                </button>
+                {!saved && (
+                  <p className="text-xs text-amber-600">Not yet saved to archive</p>
+                )}
+              </div>
             </div>
           ) : (
             <div className="card p-8 text-center text-sm text-gray-500 min-h-[300px] flex items-center justify-center">
