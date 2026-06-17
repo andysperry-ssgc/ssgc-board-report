@@ -196,7 +196,7 @@ export default function AdminArchivePage() {
                   const subs = cycleSubmissions[c.id] ?? []
 
                   return (
-                    <div key={c.id} className="card overflow-hidden">
+                    <div key={c.id} className={`card overflow-hidden ${!c.report && !c.is_current ? 'ring-2 ring-brand-500 ring-offset-1' : ''}`}>
                       {/* Cycle header */}
                       <div className="px-4 py-3 flex items-center justify-between gap-4">
                         <button
@@ -252,10 +252,10 @@ export default function AdminArchivePage() {
                             </>
                           ) : (
                             <>
-                              <span className="text-xs text-gray-400 hidden sm:inline">No report</span>
+                              <span className="text-xs text-amber-600 font-medium hidden sm:inline">Report needed</span>
                               <a
                                 href={`/admin/generate?cycle_id=${c.id}`}
-                                className="btn-primary text-xs"
+                                className="btn-primary text-sm"
                               >
                                 Generate report
                               </a>

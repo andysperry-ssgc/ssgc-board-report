@@ -238,8 +238,16 @@ export default function Dashboard() {
 
           {/* Submissions */}
           {!cycle ? (
-            <div className="card p-6 text-center text-sm text-gray-500">
-              No active cycle. Create one to get started.
+            <div className="card p-6 text-center space-y-3">
+              <p className="text-sm text-gray-500">No active cycle.</p>
+              <div className="flex items-center justify-center gap-3">
+                <button onClick={() => setShowNewCycle(true)} className="btn-primary text-sm">
+                  + New cycle
+                </button>
+                <a href="/admin/archive" className="btn-secondary text-sm">
+                  View archive &amp; generate reports →
+                </a>
+              </div>
             </div>
           ) : (
             <div>
