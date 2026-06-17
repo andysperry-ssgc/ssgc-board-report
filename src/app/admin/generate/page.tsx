@@ -173,6 +173,31 @@ function GeneratePageInner() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Controls */}
         <div className="space-y-4">
+
+          {/* Submission status — shown first so it's immediately visible */}
+          {selectedCycle && (
+            <div className="card p-4 space-y-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                Submissions — {selectedCycle.label}
+              </p>
+              <div className="space-y-1">
+                {submitted.map(m => (
+                  <div key={m.name} className="flex items-center gap-2 text-xs text-gray-700">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
+                    {m.name}
+                  </div>
+                ))}
+                {pending.map(m => (
+                  <div key={m.name} className="flex items-center gap-2 text-xs text-gray-400">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-300 flex-shrink-0" />
+                    {m.name}
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400">{submitted.length} of {TEAM_MEMBERS.length} submitted</p>
+            </div>
+          )}
+
           <div className="card p-4 space-y-4">
 
             {allCycles.length > 0 && (
@@ -238,30 +263,6 @@ function GeneratePageInner() {
               ) : 'Generate report'}
             </button>
           </div>
-
-          {/* Submission status */}
-          {selectedCycle && (
-            <div className="card p-4 space-y-3">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                Submissions — {selectedCycle.label}
-              </p>
-              <div className="space-y-1">
-                {submitted.map(m => (
-                  <div key={m.name} className="flex items-center gap-2 text-xs text-gray-700">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
-                    {m.name}
-                  </div>
-                ))}
-                {pending.map(m => (
-                  <div key={m.name} className="flex items-center gap-2 text-xs text-gray-400">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-300 flex-shrink-0" />
-                    {m.name}
-                  </div>
-                ))}
-              </div>
-              <p className="text-xs text-gray-400">{submitted.length} of {TEAM_MEMBERS.length} submitted</p>
-            </div>
-          )}
 
           {content && (
             <div className="card p-4 space-y-2">

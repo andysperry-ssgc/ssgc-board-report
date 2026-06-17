@@ -16,6 +16,7 @@ export default function AdminArchivePage() {
   const [cycleSubmissions, setCycleSubmissions] = useState<Record<number, Submission[]>>({})
   const [loadingSubmissions, setLoadingSubmissions] = useState<number | null>(null)
   const [deletingReport, setDeletingReport] = useState<number | null>(null)
+  const [draftCycleIds, setDraftCycleIds] = useState<Set<number>>(new Set())
 
   // Upload past report modal
   const [showUpload, setShowUpload] = useState(false)
@@ -28,6 +29,19 @@ export default function AdminArchivePage() {
   const [expandedReport, setExpandedReport] = useState<number | null>(null)
 
   useEffect(() => { load() }, [])
+
+  // Check localStorage for unsaved drafts
+  useEffect(() => {
+    const ids = new Set<number>()
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key?.startsWith('report_draft_')) {
+        const id = Number(key.replace('report_draft_', ''))
+        if (!isNaN(id)) ids.add(id)
+      }
+    }
+    setDraftCycleIds(ids)
+  }, [])
 
   async function load() {
     setLoading(true)
@@ -252,12 +266,16 @@ export default function AdminArchivePage() {
                             </>
                           ) : (
                             <>
-                              <span className="text-xs text-amber-600 font-medium hidden sm:inline">Report needed</span>
+                              {draftCycleIds.has(c.id) ? (
+                                <span className="text-xs text-amber-600 font-medium hidden sm:inline">Unsaved draft</span>
+                              ) : (
+                                <span className="text-xs text-amber-600 font-medium hidden sm:inline">Report needed</span>
+                              )}
                               <a
                                 href={`/admin/generate?cycle_id=${c.id}`}
                                 className="btn-primary text-sm"
                               >
-                                Generate report
+                                {draftCycleIds.has(c.id) ? 'Review draft' : 'Generate report'}
                               </a>
                             </>
                           )}
