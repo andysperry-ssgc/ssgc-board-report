@@ -144,10 +144,14 @@ export default function RemindersPage() {
         <strong>Automated schedule:</strong> Messages fire automatically via cron when the cycle is active (all times CT). Use manual send for off-schedule needs or testing.
       </div>
 
+      {!cycle && !loading && (
+        <div className="mb-4 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded px-3 py-2">
+          No active cycle — templates are editable but send buttons are disabled until a cycle opens.
+        </div>
+      )}
+
       {loading ? (
         <div className="text-sm text-gray-500">Loading…</div>
-      ) : !cycle ? (
-        <div className="card p-6 text-sm text-gray-500 text-center">No active cycle.</div>
       ) : (
         <div className="space-y-2">
           {previews.map((preview) => (
@@ -192,8 +196,9 @@ export default function RemindersPage() {
                   </button>
                   <button
                     onClick={() => handleSend(preview.type)}
-                    disabled={sending === preview.type}
+                    disabled={sending === preview.type || !cycle}
                     className="btn-secondary text-xs"
+                    title={!cycle ? 'No active cycle' : undefined}
                   >
                     {sending === preview.type ? 'Sending…' : 'Send now'}
                   </button>

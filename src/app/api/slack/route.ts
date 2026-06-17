@@ -52,21 +52,22 @@ export async function GET(req: NextRequest) {
     if (!isAdmin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const cycle = await getCurrentCycle()
-    if (!cycle) return NextResponse.json({ previews: [], templates: {}, cycle: null })
-
-    const statuses = await getSubmissionStatus(cycle.id)
-    const submissionUrl = (await getSetting('submission_url')) ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
     const settings = await getAllSettings()
-    const vars = getTemplateVars(cycle.label, submissionUrl, statuses)
 
     const messageTypes: SlackMessageType[] = [
       'opening', 'reminder_1', 'reminder_2', 'reminder_3',
       'final_warning', 'last_call', 'celebration', 'closed',
     ]
 
+    // Always build previews — use placeholder vars when no cycle is active
+    const submissionUrl = (await getSetting('submission_url')) ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
+    const vars = cycle
+      ? getTemplateVars(cycle.label, submissionUrl, await getSubmissionStatus(cycle.id))
+      : getTemplateVars('(cycle label)', submissionUrl, [])
+
     const previews = await Promise.all(
       messageTypes.map(async (type) => {
-        const sent     = await hasMessageBeenSent(cycle.id, type)
+        const sent     = cycle ? await hasMessageBeenSent(cycle.id, type) : false
         const template = resolveTemplate(type, settings)
         const text     = renderTemplate(template, vars)
         const isCustom = !!settings[TEMPLATE_KEY(type)]
@@ -74,7 +75,6 @@ export async function GET(req: NextRequest) {
       })
     )
 
-    // Return templates map (custom if set, default otherwise) for the edit UI
     const templates = Object.fromEntries(
       messageTypes.map(type => [type, resolveTemplate(type, settings)])
     )
