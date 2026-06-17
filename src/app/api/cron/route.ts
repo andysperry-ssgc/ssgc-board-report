@@ -46,13 +46,6 @@ export async function GET(req: NextRequest) {
   try {
     const now = new Date()
 
-    // ── Auto-close expired cycle ─────────────────────────────────────────────
-    const expiredCycle = await getCurrentCycle()
-    if (expiredCycle && now > new Date(expiredCycle.closes_at)) {
-      await closeCycle(expiredCycle.id)
-      console.log(`[cron] Auto-closed expired cycle: ${expiredCycle.label}`)
-    }
-
     // ── Auto-create cycle ────────────────────────────────────────────────────
     if (isScheduledCycleMonday(now)) {
       const existing = await getCurrentCycle()
@@ -151,6 +144,12 @@ export async function GET(req: NextRequest) {
         await recordMessageSent(cycle.id, 'closed', ts)
         sent = 'closed'
       }
+    }
+
+    // ── Auto-close expired cycle (runs last so closed message fires first) ────
+    if (now > new Date(cycle.closes_at)) {
+      await closeCycle(cycle.id)
+      console.log(`[cron] Auto-closed expired cycle: ${cycle.label}`)
     }
 
     return NextResponse.json({ message: sent ? `Sent ${sent}` : 'No action needed', sent })
