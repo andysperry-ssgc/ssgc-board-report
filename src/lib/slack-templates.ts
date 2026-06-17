@@ -52,7 +52,7 @@ Submissions close at *9:00 am CT today* (2 hours).
 Submit now: {{submissionUrl}}`,
 
   last_call:
-`<!channel> 🚨 *Last call — 2 hours left! {{cycleLabel}}*
+`<!channel> 🚨 *Last call — 1 hour left! {{cycleLabel}}*
 Submissions close at *9:00 am CT*.
 
 {{submittedList}}
