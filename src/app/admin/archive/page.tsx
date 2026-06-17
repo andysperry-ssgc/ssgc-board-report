@@ -254,7 +254,7 @@ export default function AdminArchivePage() {
                                 href={`/admin/generate?cycle_id=${c.id}`}
                                 className="btn-ghost text-xs"
                               >
-                                Re-generate
+                                Edit report
                               </a>
                               <button
                                 onClick={() => c.report && handleDeleteReport(c.report.id)}

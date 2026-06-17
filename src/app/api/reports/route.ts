@@ -32,11 +32,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    const result = await sql<Report>`
-      INSERT INTO reports (cycle_id, period, type, content, source)
-      VALUES (${cycle_id ?? null}, ${period}, ${type}, ${content}, ${source ?? 'generated'})
-      RETURNING *
-    `
+    // Upsert: update existing report for this cycle rather than duplicating
+    const result = cycle_id
+      ? await sql<Report>`
+          INSERT INTO reports (cycle_id, period, type, content, source)
+          VALUES (${cycle_id}, ${period}, ${type}, ${content}, ${source ?? 'generated'})
+          ON CONFLICT (cycle_id) DO UPDATE
+            SET content = EXCLUDED.content,
+                period = EXCLUDED.period,
+                source = EXCLUDED.source,
+                generated_at = NOW()
+          RETURNING *
+        `
+      : await sql<Report>`
+          INSERT INTO reports (cycle_id, period, type, content, source)
+          VALUES (NULL, ${period}, ${type}, ${content}, ${source ?? 'generated'})
+          RETURNING *
+        `
     return NextResponse.json({ report: result.rows[0] })
   } catch (err) {
     console.error('POST /api/reports error:', err)

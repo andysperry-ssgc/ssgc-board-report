@@ -27,27 +27,45 @@ function GeneratePageInner() {
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [hasDraft, setHasDraft] = useState(false)
 
-  // Load cycles on mount
+  // Load cycles and any existing saved report on mount
   useEffect(() => {
     Promise.all([
       fetch('/api/submissions').then(r => r.json()),
       fetch('/api/cycles').then(r => r.json()),
-    ]).then(([subData, cycleData]) => {
+      fetch('/api/reports').then(r => r.json()),
+    ]).then(([subData, cycleData, reportData]) => {
       const cycles: Cycle[] = cycleData.cycles ?? []
+      const reports = reportData.reports ?? []
       setAllCycles(cycles)
 
+      let resolvedId: number | null = null
       if (urlCycleId) {
         const c = cycles.find(c => c.id === urlCycleId)
         if (c) { setPeriod(c.label); setType(c.type) }
+        resolvedId = urlCycleId
       } else if (subData.cycle) {
         setSelectedCycleId(subData.cycle.id)
         setPeriod(subData.cycle.label)
         setType(subData.cycle.type)
+        resolvedId = subData.cycle.id
       } else if (cycles.length > 0) {
         const latest = cycles[0]
         setSelectedCycleId(latest.id)
         setPeriod(latest.label)
         setType(latest.type)
+        resolvedId = latest.id
+      }
+
+      // Pre-load saved report if no localStorage draft exists
+      if (resolvedId) {
+        const draft = localStorage.getItem(draftKey(resolvedId))
+        if (!draft) {
+          const saved = reports.find((r: { cycle_id: number; content: string }) => r.cycle_id === resolvedId)
+          if (saved) {
+            setContent(saved.content)
+            setSaved(true)
+          }
+        }
       }
     }).catch(() => {})
   }, [urlCycleId])
