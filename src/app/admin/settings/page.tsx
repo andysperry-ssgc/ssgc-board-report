@@ -18,8 +18,6 @@ export default function SettingsPage() {
 
   const [submissionUrl, setSubmissionUrl] = useState('')
   const [cycleLabel, setCycleLabel] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
   const [initLoading, setInitLoading] = useState(false)
   const [initMsg, setInitMsg] = useState('')
 
@@ -53,21 +51,6 @@ export default function SettingsPage() {
     } finally {
       setSaving(null)
     }
-  }
-
-  async function handlePasswordChange(e: React.FormEvent) {
-    e.preventDefault()
-    if (newPassword !== confirmPassword) {
-      setError('Passwords do not match')
-      return
-    }
-    if (newPassword.length < 8) {
-      setError('Password must be at least 8 characters')
-      return
-    }
-    await saveSetting('admin_password', newPassword, 'Password')
-    setNewPassword('')
-    setConfirmPassword('')
   }
 
   async function handleInitDb() {
@@ -140,32 +123,13 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Password change */}
+        {/* Admin password */}
         <div className="card p-5 space-y-3">
-          <h2 className="text-sm font-semibold text-gray-900">Change admin password</h2>
+          <h2 className="text-sm font-semibold text-gray-900">Admin password</h2>
           <p className="text-xs text-gray-500">
-            For a permanent change, also update <code className="bg-gray-100 px-1 rounded">ADMIN_PASSWORD</code> in your Vercel environment variables.
+            The admin password is set via the <code className="bg-gray-100 px-1 rounded">ADMIN_PASSWORD</code> environment
+            variable in Vercel. To change it, update that variable in your Vercel project settings and redeploy.
           </p>
-          <form onSubmit={handlePasswordChange} className="space-y-3">
-            <input
-              type="password"
-              className="input"
-              placeholder="New password (min 8 chars)"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              minLength={8}
-            />
-            <input
-              type="password"
-              className="input"
-              placeholder="Confirm new password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-            />
-            <button type="submit" disabled={!newPassword || saving === 'admin_password'} className="btn-primary text-sm">
-              {saving === 'admin_password' ? 'Updating…' : 'Update password'}
-            </button>
-          </form>
         </div>
 
         {/* Auto-scheduling */}

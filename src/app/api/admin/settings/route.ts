@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAllSettings, setSetting, deleteSetting } from '@/lib/db'
-import { requireAdmin, getAdminPassword } from '@/lib/auth'
+import { requireAdmin } from '@/lib/auth'
 
 export async function GET() {
   try {
@@ -24,14 +24,6 @@ export async function POST(req: NextRequest) {
 
     if (!key || value === undefined) {
       return NextResponse.json({ error: 'Missing key or value' }, { status: 400 })
-    }
-
-    // Password change is handled via env var note — we store a hashed version
-    if (key === 'admin_password') {
-      // In production, this would set ADMIN_PASSWORD env var via Vercel API
-      // For now, we store it and check both env var and setting
-      await setSetting('admin_password_override', value)
-      return NextResponse.json({ success: true, note: 'Password updated. Restart may be needed in some environments.' })
     }
 
     await setSetting(key, value)
