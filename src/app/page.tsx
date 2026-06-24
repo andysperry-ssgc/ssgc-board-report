@@ -44,7 +44,7 @@ export default function HomePage() {
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
         <div className="mb-6">
-          <h1 className="text-xl font-semibold text-gray-900">Board Report Submission</h1>
+          <h1 className="text-xl font-semibold text-gray-900">TEST</h1>
           <p className="text-sm text-gray-500 mt-1">SafeSpace Global — Leadership team</p>
         </div>
 
