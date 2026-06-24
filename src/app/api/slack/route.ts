@@ -7,15 +7,8 @@ import {
   recordMessageSent,
   hasMessageBeenSent,
 } from '@/lib/slack'
-import { DEFAULT_TEMPLATES, renderTemplate, getTemplateVars } from '@/lib/slack-templates'
+import { renderTemplate, getTemplateVars, resolveTemplate, templateKey } from '@/lib/slack-templates'
 import type { SlackMessageType } from '@/types'
-
-const TEMPLATE_KEY = (type: SlackMessageType) => `slack_msg_${type}`
-
-/** Resolve the template for a message type — custom override or default. */
-function resolveTemplate(type: SlackMessageType, settings: Record<string, string>): string {
-  return settings[TEMPLATE_KEY(type)] ?? DEFAULT_TEMPLATES[type]
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -70,7 +63,7 @@ export async function GET(req: NextRequest) {
         const sent     = cycle ? await hasMessageBeenSent(cycle.id, type) : false
         const template = resolveTemplate(type, settings)
         const text     = renderTemplate(template, vars)
-        const isCustom = !!settings[TEMPLATE_KEY(type)]
+        const isCustom = !!settings[templateKey(type)]
         return { type, text, template, isCustom, sent }
       })
     )

@@ -1,11 +1,16 @@
 import { WebClient } from '@slack/web-api'
 import { sql } from '@/lib/db'
-import type { SlackMessageType, SubmissionStatus } from '@/types'
-import { TEAM_MEMBERS } from './team'
+import type { SlackMessageType } from '@/types'
 
 // Re-export template helpers from the browser-safe module
-export { DEFAULT_TEMPLATES, renderTemplate, getTemplateVars } from './slack-templates'
-import { DEFAULT_TEMPLATES, renderTemplate, getTemplateVars } from './slack-templates'
+export {
+  DEFAULT_TEMPLATES,
+  renderTemplate,
+  getTemplateVars,
+  resolveTemplate,
+  renderMessage,
+  templateKey,
+} from './slack-templates'
 
 let slackClient: WebClient | null = null
 
@@ -26,65 +31,6 @@ export async function postSlackMessage(text: string): Promise<string | undefined
     mrkdwn: true,
   })
   return result.ts as string | undefined
-}
-
-export function buildOpeningMessage(cycleLabel: string, submissionUrl: string): string {
-  const vars = {
-    cycleLabel,
-    submissionUrl,
-    teamNames: TEAM_MEMBERS.map(m => m.firstName).join(' '),
-    submittedList: '',
-    pendingList: '',
-    pendingNames: '',
-  }
-  return renderTemplate(DEFAULT_TEMPLATES.opening, vars)
-}
-
-export function buildReminderMessage(
-  cycleLabel: string,
-  submissionUrl: string,
-  statuses: SubmissionStatus[],
-  messageNum: 1 | 2 | 3
-): string {
-  const vars = getTemplateVars(cycleLabel, submissionUrl, statuses)
-  const templateKey = `reminder_${messageNum}` as SlackMessageType
-  return renderTemplate(DEFAULT_TEMPLATES[templateKey], vars)
-}
-
-export function buildFinalWarningMessage(
-  cycleLabel: string,
-  submissionUrl: string,
-  statuses: SubmissionStatus[]
-): string {
-  const vars = getTemplateVars(cycleLabel, submissionUrl, statuses)
-  return renderTemplate(DEFAULT_TEMPLATES.final_warning, vars)
-}
-
-export function buildLastCallMessage(
-  cycleLabel: string,
-  submissionUrl: string,
-  statuses: SubmissionStatus[]
-): string {
-  const vars = getTemplateVars(cycleLabel, submissionUrl, statuses)
-  return renderTemplate(DEFAULT_TEMPLATES.last_call, vars)
-}
-
-export function buildCelebrationMessage(statuses: SubmissionStatus[]): string {
-  const allNames = statuses.map((s) => `✅ ${s.firstName}`).join('  ')
-  return `🎉 *All board report submissions are in!*
-
-${allNames}
-
-Thank you all — great work! Report will be distributed by 5:00 pm Wednesday. Scott will distribute.`
-}
-
-export function buildClosedMessage(
-  cycleLabel: string,
-  submissionUrl: string,
-  statuses: SubmissionStatus[]
-): string {
-  const vars = getTemplateVars(cycleLabel, submissionUrl, statuses)
-  return renderTemplate(DEFAULT_TEMPLATES.closed, vars)
 }
 
 export async function hasMessageBeenSent(

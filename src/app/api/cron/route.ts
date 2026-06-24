@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentCycle, getSubmissionStatus, allSubmitted, createCycle, closeCycle } from '@/lib/cycles'
-import { getSetting } from '@/lib/db'
+import { getSetting, getAllSettings } from '@/lib/db'
 import {
   isScheduledCycleMonday,
   getOpenTime,
@@ -13,13 +13,9 @@ import {
   recordMessageSent,
   hasMessageBeenSent,
   cancelRemainingMessages,
-  buildOpeningMessage,
-  buildReminderMessage,
-  buildFinalWarningMessage,
-  buildLastCallMessage,
-  buildCelebrationMessage,
-  buildClosedMessage,
+  renderMessage,
 } from '@/lib/slack'
+import type { SlackMessageType } from '@/types'
 
 // Biweekly Slack schedule — all times CT (DST-aware):
 // Mon  8:00 am → opening
@@ -64,6 +60,15 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ message: 'No active cycle' })
     }
 
+    // Auto-close runs on every path below so an early-completed cycle still
+    // closes (and the next biweekly cycle can be auto-created).
+    async function autoCloseIfExpired() {
+      if (now > new Date(cycle!.closes_at)) {
+        await closeCycle(cycle!.id)
+        console.log(`[cron] Auto-closed expired cycle: ${cycle!.label}`)
+      }
+    }
+
     // ── Guard: only send messages Mon–Wed of the cycle's opening week ────────
     const cycleOpenDay = Date.UTC(
       new Date(cycle.opens_at).getUTCFullYear(),
@@ -73,84 +78,65 @@ export async function GET(req: NextRequest) {
     const nowDay = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
     const daysSinceOpen = Math.floor((nowDay - cycleOpenDay) / 86_400_000)
     if (daysSinceOpen < 0 || daysSinceOpen > 2) {
+      // Still close out a cycle whose window has fully passed.
+      await autoCloseIfExpired()
       return NextResponse.json({ message: 'Outside cycle window' })
     }
 
     const statuses = await getSubmissionStatus(cycle.id)
     const submissionUrl = (await getSetting('submission_url')) ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
+    const settings = await getAllSettings()
     const cycleLabel = cycle.label
+
+    // Render through the shared resolver so custom template overrides apply.
+    const send = (type: SlackMessageType) =>
+      postSlackMessage(renderMessage(type, settings, cycleLabel, submissionUrl, statuses))
 
     // ── All submitted → celebrate and cancel remaining ───────────────────────
     if (allSubmitted(statuses)) {
-      const celebrationSent = await hasMessageBeenSent(cycle.id, 'celebration')
-      if (!celebrationSent) {
+      let sent: string | null = null
+      if (!(await hasMessageBeenSent(cycle.id, 'celebration'))) {
         await cancelRemainingMessages(cycle.id)
-        const ts = await postSlackMessage(buildCelebrationMessage(statuses))
+        const ts = await send('celebration')
         await recordMessageSent(cycle.id, 'celebration', ts)
-        return NextResponse.json({ message: 'Celebration sent', sent: 'celebration' })
+        sent = 'celebration'
       }
-      return NextResponse.json({ message: 'All submitted, celebration already sent' })
+      await autoCloseIfExpired()
+      return NextResponse.json({
+        message: sent ? 'Celebration sent' : 'All submitted, celebration already sent',
+        sent,
+      })
     }
 
     // ── Scheduled messages (CT times) ────────────────────────────────────────
     let sent: string | null = null
 
-    if (atCT(now, 1, 8)) {
-      // Monday 8am — opening
-      if (!(await hasMessageBeenSent(cycle.id, 'opening'))) {
-        const ts = await postSlackMessage(buildOpeningMessage(cycleLabel, submissionUrl))
-        await recordMessageSent(cycle.id, 'opening', ts)
-        sent = 'opening'
-      }
-    } else if (atCT(now, 1, 16)) {
-      // Monday 4pm — reminder 1
-      if (!(await hasMessageBeenSent(cycle.id, 'reminder_1'))) {
-        const ts = await postSlackMessage(buildReminderMessage(cycleLabel, submissionUrl, statuses, 1))
-        await recordMessageSent(cycle.id, 'reminder_1', ts)
-        sent = 'reminder_1'
-      }
-    } else if (atCT(now, 2, 11)) {
-      // Tuesday 11am — reminder 2
-      if (!(await hasMessageBeenSent(cycle.id, 'reminder_2'))) {
-        const ts = await postSlackMessage(buildReminderMessage(cycleLabel, submissionUrl, statuses, 2))
-        await recordMessageSent(cycle.id, 'reminder_2', ts)
-        sent = 'reminder_2'
-      }
-    } else if (atCT(now, 2, 16)) {
-      // Tuesday 4pm — reminder 3
-      if (!(await hasMessageBeenSent(cycle.id, 'reminder_3'))) {
-        const ts = await postSlackMessage(buildReminderMessage(cycleLabel, submissionUrl, statuses, 3))
-        await recordMessageSent(cycle.id, 'reminder_3', ts)
-        sent = 'reminder_3'
-      }
-    } else if (atCT(now, 3, 7)) {
-      // Wednesday 7am — final warning (2 hrs before 9am deadline)
-      if (!(await hasMessageBeenSent(cycle.id, 'final_warning'))) {
-        const ts = await postSlackMessage(buildFinalWarningMessage(cycleLabel, submissionUrl, statuses))
-        await recordMessageSent(cycle.id, 'final_warning', ts)
-        sent = 'final_warning'
-      }
-    } else if (atCT(now, 3, 8)) {
-      // Wednesday 8am — last call (1 hr before 9am deadline)
-      if (!(await hasMessageBeenSent(cycle.id, 'last_call'))) {
-        const ts = await postSlackMessage(buildLastCallMessage(cycleLabel, submissionUrl, statuses))
-        await recordMessageSent(cycle.id, 'last_call', ts)
-        sent = 'last_call'
-      }
-    } else if (atCT(now, 3, 9)) {
-      // Wednesday 9am — closed / submissions closed
-      if (!(await hasMessageBeenSent(cycle.id, 'closed'))) {
-        const ts = await postSlackMessage(buildClosedMessage(cycleLabel, submissionUrl, statuses))
-        await recordMessageSent(cycle.id, 'closed', ts)
-        sent = 'closed'
+    async function sendOnce(type: SlackMessageType) {
+      if (!(await hasMessageBeenSent(cycle!.id, type))) {
+        const ts = await send(type)
+        await recordMessageSent(cycle!.id, type, ts)
+        sent = type
       }
     }
 
-    // ── Auto-close expired cycle (runs last so closed message fires first) ────
-    if (now > new Date(cycle.closes_at)) {
-      await closeCycle(cycle.id)
-      console.log(`[cron] Auto-closed expired cycle: ${cycle.label}`)
+    if (atCT(now, 1, 8)) {
+      await sendOnce('opening')        // Monday 8am — opening
+    } else if (atCT(now, 1, 16)) {
+      await sendOnce('reminder_1')     // Monday 4pm — reminder 1
+    } else if (atCT(now, 2, 11)) {
+      await sendOnce('reminder_2')     // Tuesday 11am — reminder 2
+    } else if (atCT(now, 2, 16)) {
+      await sendOnce('reminder_3')     // Tuesday 4pm — reminder 3
+    } else if (atCT(now, 3, 7)) {
+      await sendOnce('final_warning')  // Wednesday 7am — final warning (2 hrs before 9am)
+    } else if (atCT(now, 3, 8)) {
+      await sendOnce('last_call')      // Wednesday 8am — last call (1 hr before 9am)
+    } else if (atCT(now, 3, 9)) {
+      await sendOnce('closed')         // Wednesday 9am — closed / submissions closed
     }
+
+    // ── Auto-close expired cycle (runs after closed message so it fires first) ─
+    await autoCloseIfExpired()
 
     return NextResponse.json({ message: sent ? `Sent ${sent}` : 'No action needed', sent })
   } catch (err) {

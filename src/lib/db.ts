@@ -1,7 +1,16 @@
-import { neon } from '@neondatabase/serverless'
+import { neon, type NeonQueryFunction } from '@neondatabase/serverless'
 
-const connectionString = process.env.POSTGRES_URL ?? process.env.DATABASE_URL ?? ''
-const _sql = neon(connectionString)
+// Lazily construct the Neon client on first query — constructing it at module
+// load throws when POSTGRES_URL is unset (e.g. local build/dev), and matches
+// the lazy-init pattern used in slack.ts / anthropic.ts.
+let _sql: NeonQueryFunction<false, false> | null = null
+function getSql(): NeonQueryFunction<false, false> {
+  if (!_sql) {
+    const connectionString = process.env.POSTGRES_URL ?? process.env.DATABASE_URL ?? ''
+    _sql = neon(connectionString)
+  }
+  return _sql
+}
 
 // Compatibility shim — wraps Neon (which returns rows directly) to match
 // the { rows } shape that @vercel/postgres used, so no other files need changing.
@@ -9,7 +18,7 @@ export async function sql<T = Record<string, unknown>>(
   strings: TemplateStringsArray,
   ...values: unknown[]
 ): Promise<{ rows: T[] }> {
-  const rows = (await _sql(strings, ...values)) as T[]
+  const rows = (await getSql()(strings, ...values)) as T[]
   return { rows }
 }
 
