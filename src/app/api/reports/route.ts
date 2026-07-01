@@ -32,23 +32,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    // Upsert: update existing report for this cycle rather than duplicating
-    const result = cycle_id
-      ? await sql<Report>`
-          INSERT INTO reports (cycle_id, period, type, content, source)
-          VALUES (${cycle_id}, ${period}, ${type}, ${content}, ${source ?? 'generated'})
-          ON CONFLICT (cycle_id) DO UPDATE
-            SET content = EXCLUDED.content,
-                period = EXCLUDED.period,
-                source = EXCLUDED.source,
-                generated_at = NOW()
+    // Upsert in application code: update an existing report for this cycle if
+    // present, otherwise insert. Done manually (not via ON CONFLICT) because the
+    // reports table has no unique constraint on cycle_id.
+    let result: { rows: Report[] }
+    if (cycle_id) {
+      const updated = await sql<Report>`
+        UPDATE reports
+          SET content = ${content},
+              period = ${period},
+              type = ${type},
+              source = ${source ?? 'generated'},
+              generated_at = NOW()
+          WHERE cycle_id = ${cycle_id}
           RETURNING *
-        `
-      : await sql<Report>`
-          INSERT INTO reports (cycle_id, period, type, content, source)
-          VALUES (NULL, ${period}, ${type}, ${content}, ${source ?? 'generated'})
-          RETURNING *
-        `
+      `
+      result = updated.rows.length > 0
+        ? updated
+        : await sql<Report>`
+            INSERT INTO reports (cycle_id, period, type, content, source)
+            VALUES (${cycle_id}, ${period}, ${type}, ${content}, ${source ?? 'generated'})
+            RETURNING *
+          `
+    } else {
+      result = await sql<Report>`
+        INSERT INTO reports (cycle_id, period, type, content, source)
+        VALUES (NULL, ${period}, ${type}, ${content}, ${source ?? 'generated'})
+        RETURNING *
+      `
+    }
     return NextResponse.json({ report: result.rows[0] })
   } catch (err) {
     console.error('POST /api/reports error:', err)
