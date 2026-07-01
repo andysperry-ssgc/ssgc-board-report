@@ -5,9 +5,10 @@ import { getSubmissionsForCycle } from '@/lib/cycles'
 import { requireAdmin } from '@/lib/auth'
 import type { Submission } from '@/types'
 
-// Report generation can take up to ~a minute; give the function room beyond the
-// short default so a full report isn't cut off by a Vercel function timeout.
-export const maxDuration = 60
+// A full report can take a couple of minutes to generate; give the function
+// ample room (Pro plan allows up to 300s) so it isn't killed mid-generation and
+// forced to return a non-JSON platform error.
+export const maxDuration = 300
 
 export async function POST(req: NextRequest) {
   try {

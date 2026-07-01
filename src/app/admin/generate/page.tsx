@@ -133,9 +133,21 @@ function GeneratePageInner() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ period, type, cycle_id: selectedCycleId }),
       })
-      const data = await res.json()
+      // The response may be a non-JSON platform error page (e.g. a timeout), so
+      // read it as text and parse defensively rather than assuming JSON.
+      const raw = await res.text()
+      let data: { content?: string; truncated?: boolean; error?: string } = {}
+      try {
+        data = JSON.parse(raw)
+      } catch {
+        throw new Error(
+          res.ok
+            ? 'Unexpected response from the server. Please try again.'
+            : 'Report generation took too long or the server errored. Please try again.'
+        )
+      }
       if (!res.ok) throw new Error(data.error || 'Generation failed')
-      setContent(data.content)
+      setContent(data.content ?? '')
       setTruncated(!!data.truncated)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Generation failed')
