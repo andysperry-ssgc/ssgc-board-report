@@ -21,6 +21,7 @@ function GeneratePageInner() {
   const [generating, setGenerating] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [truncated, setTruncated] = useState(false)
   const [saved, setSaved] = useState(false)
   const [allCycles, setAllCycles] = useState<Cycle[]>([])
   const [selectedCycleId, setSelectedCycleId] = useState<number | null>(urlCycleId)
@@ -124,6 +125,7 @@ function GeneratePageInner() {
     if (!period.trim()) return
     setGenerating(true)
     setError('')
+    setTruncated(false)
     setSaved(false)
     try {
       const res = await fetch('/api/generate', {
@@ -134,6 +136,7 @@ function GeneratePageInner() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Generation failed')
       setContent(data.content)
+      setTruncated(!!data.truncated)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Generation failed')
     } finally {
@@ -286,6 +289,12 @@ function GeneratePageInner() {
         <div className="lg:col-span-2">
           {error && (
             <div className="mb-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</div>
+          )}
+
+          {truncated && (
+            <div className="mb-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+              This report hit the generation length limit and may be cut off at the end. Review the ending before saving or distributing, and regenerate if needed.
+            </div>
           )}
 
           {/* Draft restore banner */}

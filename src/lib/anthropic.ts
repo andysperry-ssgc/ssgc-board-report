@@ -2,7 +2,10 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { Submission } from '@/types'
 
 const MODEL = 'claude-sonnet-4-6'
-const MAX_TOKENS = 4000
+// Board reports run well past 4k tokens and were being truncated mid-sentence.
+// 16k is the safe non-streaming default for Sonnet 4.6 (max output is 64k) and
+// is far more than a full report needs.
+const MAX_TOKENS = 16000
 
 let client: Anthropic | null = null
 
@@ -67,7 +70,7 @@ export async function generateReport(
   period: string,
   type: 'weekly' | 'biweekly',
   submissions: Submission[]
-): Promise<string> {
+): Promise<{ content: string; truncated: boolean }> {
   const today = new Date().toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
@@ -120,5 +123,7 @@ Rules: Do not organize by department. Write as one company. Lead with commercial
     messages: [{ role: 'user', content: prompt }],
   })
 
-  return response.content[0].type === 'text' ? response.content[0].text : ''
+  const content = response.content[0]?.type === 'text' ? response.content[0].text : ''
+  // Surface a hard stop at the token cap so a truncated report never passes silently.
+  return { content, truncated: response.stop_reason === 'max_tokens' }
 }

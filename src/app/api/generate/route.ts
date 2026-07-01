@@ -5,6 +5,10 @@ import { getSubmissionsForCycle } from '@/lib/cycles'
 import { requireAdmin } from '@/lib/auth'
 import type { Submission } from '@/types'
 
+// Report generation can take up to ~a minute; give the function room beyond the
+// short default so a full report isn't cut off by a Vercel function timeout.
+export const maxDuration = 60
+
 export async function POST(req: NextRequest) {
   try {
     const isAdmin = await requireAdmin()
@@ -33,8 +37,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No submissions found for this cycle' }, { status: 400 })
     }
 
-    const content = await generateReport(period, type as 'weekly' | 'biweekly', submissions)
-    return NextResponse.json({ content })
+    const { content, truncated } = await generateReport(period, type as 'weekly' | 'biweekly', submissions)
+    return NextResponse.json({ content, truncated })
   } catch (err) {
     console.error('POST /api/generate error:', err)
     return NextResponse.json({ error: 'Failed to generate report' }, { status: 500 })
