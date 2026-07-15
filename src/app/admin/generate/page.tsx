@@ -3,8 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import type { Cycle, Submission } from '@/types'
-import { TEAM_MEMBERS } from '@/lib/team'
+import type { Cycle, Submission, SubmissionStatus } from '@/types'
 import { buildPrintHtml, fetchLogoBase64 } from '@/lib/report-html'
 
 function draftKey(cycleId: number | null) {
@@ -26,6 +25,7 @@ function GeneratePageInner() {
   const [allCycles, setAllCycles] = useState<Cycle[]>([])
   const [selectedCycleId, setSelectedCycleId] = useState<number | null>(urlCycleId)
   const [submissions, setSubmissions] = useState<Submission[]>([])
+  const [statuses, setStatuses] = useState<SubmissionStatus[]>([])
   const [hasDraft, setHasDraft] = useState(false)
 
   // Load cycles and any existing saved report on mount
@@ -77,7 +77,10 @@ function GeneratePageInner() {
 
     fetch(`/api/submissions?cycle_id=${selectedCycleId}`)
       .then(r => r.json())
-      .then(data => setSubmissions(data.submissions ?? []))
+      .then(data => {
+        setSubmissions(data.submissions ?? [])
+        setStatuses(data.statuses ?? [])
+      })
       .catch(() => {})
 
     const draft = localStorage.getItem(draftKey(selectedCycleId))
@@ -191,8 +194,8 @@ function GeneratePageInner() {
   }
 
   const selectedCycle = allCycles.find(c => c.id === selectedCycleId)
-  const submitted = TEAM_MEMBERS.filter(m => submissions.some(s => s.person_name === m.name))
-  const pending = TEAM_MEMBERS.filter(m => !submissions.some(s => s.person_name === m.name))
+  const submitted = statuses.filter(s => s.submitted)
+  const pending = statuses.filter(s => !s.submitted)
 
   return (
     <div>
@@ -292,7 +295,7 @@ function GeneratePageInner() {
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-gray-400">{submitted.length} of {TEAM_MEMBERS.length} submitted</p>
+              <p className="text-xs text-gray-400">{submitted.length} of {statuses.length} submitted</p>
             </div>
           )}
         </div>

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentCycle, getSubmissionByPerson } from '@/lib/cycles'
-import { getTeamNames } from '@/lib/team'
+import { getTeamNames } from '@/lib/team-store'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Missing person parameter' }, { status: 400 })
     }
 
-    const teamNames = getTeamNames()
+    const teamNames = await getTeamNames()
     if (!teamNames.includes(personName)) {
       return NextResponse.json({ error: 'Invalid team member' }, { status: 400 })
     }

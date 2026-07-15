@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import Nav from '@/components/Nav'
 import Scoreboard from '@/components/Scoreboard'
 import SubmissionForm from '@/components/SubmissionForm'
-import { TEAM_MEMBERS } from '@/lib/team'
 import type { Cycle, Submission, SubmissionStatus } from '@/types'
 
 export default function HomePage() {
@@ -98,7 +97,7 @@ export default function HomePage() {
                     onChange={(e) => setSelectedName(e.target.value)}
                   >
                     <option value="">— Select your name —</option>
-                    {TEAM_MEMBERS.map((m) => (
+                    {statuses.map((m) => (
                       <option key={m.name} value={m.name}>
                         {m.name}
                       </option>

@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
 
     // Auto-close runs on every path below so an early-completed cycle still
     // closes (and the next biweekly cycle can be auto-created).
-    async function autoCloseIfExpired() {
+    const autoCloseIfExpired = async () => {
       if (now > new Date(cycle!.closes_at)) {
         await closeCycle(cycle!.id)
         console.log(`[cron] Auto-closed expired cycle: ${cycle!.label}`)
@@ -111,7 +111,7 @@ export async function GET(req: NextRequest) {
     // ── Scheduled messages (CT times) ────────────────────────────────────────
     let sent: string | null = null
 
-    async function sendOnce(type: SlackMessageType) {
+    const sendOnce = async (type: SlackMessageType) => {
       if (!(await hasMessageBeenSent(cycle!.id, type))) {
         const ts = await send(type)
         await recordMessageSent(cycle!.id, type, ts)

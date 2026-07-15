@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { draftSubmission } from '@/lib/anthropic'
 import { getCurrentCycle } from '@/lib/cycles'
-import { getTeamNames } from '@/lib/team'
+import { getTeamNames } from '@/lib/team-store'
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing person_name or notes' }, { status: 400 })
     }
 
-    const teamNames = getTeamNames()
+    const teamNames = await getTeamNames()
     if (!teamNames.includes(person_name)) {
       return NextResponse.json({ error: 'Invalid team member' }, { status: 400 })
     }

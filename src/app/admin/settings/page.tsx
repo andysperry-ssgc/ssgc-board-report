@@ -2,15 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { getUpcomingCycleDates, buildAutoLabel, getCloseTime } from '@/lib/auto-schedule'
-
-interface Settings {
-  submission_url?: string
-  cycle_label?: string
-  team_members?: string
-}
+import { serializeTeamList } from '@/lib/team'
+import type { TeamMember } from '@/types'
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<Settings>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -18,17 +13,18 @@ export default function SettingsPage() {
 
   const [submissionUrl, setSubmissionUrl] = useState('')
   const [cycleLabel, setCycleLabel] = useState('')
-  const [initLoading, setInitLoading] = useState(false)
-  const [initMsg, setInitMsg] = useState('')
+  const [team, setTeam] = useState<string[]>([])
 
   useEffect(() => {
-    fetch('/api/admin/settings')
-      .then((r) => r.json())
-      .then((data) => {
-        const s = data.settings ?? {}
-        setSettings(s)
+    Promise.all([
+      fetch('/api/admin/settings').then((r) => r.json()),
+      fetch('/api/team').then((r) => r.json()),
+    ])
+      .then(([settingsData, teamData]) => {
+        const s = settingsData.settings ?? {}
         setSubmissionUrl(s.submission_url ?? '')
         setCycleLabel(s.cycle_label ?? '')
+        setTeam((teamData.members ?? []).map((m: TeamMember) => m.name))
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -53,16 +49,26 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleInitDb() {
-    setInitLoading(true)
-    setInitMsg('')
-    try {
-      const res = await fetch('/api/init', { method: 'POST' })
-      const data = await res.json()
-      setInitMsg(res.ok ? '✓ Database initialized successfully.' : data.error || 'Failed')
-    } finally {
-      setInitLoading(false)
+  function updateMember(index: number, value: string) {
+    setTeam((prev) => prev.map((n, i) => (i === index ? value : n)))
+  }
+
+  function removeMember(index: number) {
+    setTeam((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  function addMember() {
+    setTeam((prev) => [...prev, ''])
+  }
+
+  async function saveTeam() {
+    const cleaned = team.map((n) => n.trim()).filter(Boolean)
+    if (cleaned.length === 0) {
+      setError('The team needs at least one person.')
+      return
     }
+    await saveSetting('team_members', serializeTeamList(cleaned.map((name) => ({ name }))), 'Team')
+    setTeam(cleaned)
   }
 
   if (loading) return <div className="text-sm text-gray-500">Loading…</div>
@@ -132,6 +138,46 @@ export default function SettingsPage() {
           </p>
         </div>
 
+        {/* Team members */}
+        <div className="card p-5 space-y-3">
+          <h2 className="text-sm font-semibold text-gray-900">Team members</h2>
+          <p className="text-xs text-gray-500">
+            Who appears on the submission form, scoreboard, and reminders. Enter each person&apos;s full name.
+            Removing someone takes them off the roster going forward — their past submissions are kept.
+          </p>
+          <div className="space-y-2">
+            {team.map((name, i) => (
+              <div key={i} className="flex gap-2">
+                <input
+                  type="text"
+                  className="input flex-1"
+                  value={name}
+                  placeholder="Full name"
+                  onChange={(e) => updateMember(i, e.target.value)}
+                />
+                <button
+                  onClick={() => removeMember(i)}
+                  className="btn-ghost text-sm text-red-500 hover:text-red-700 px-3"
+                  aria-label={`Remove ${name || 'member'}`}
+                  title="Remove"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 pt-1">
+            <button onClick={addMember} className="btn-ghost text-sm">+ Add person</button>
+            <button
+              onClick={saveTeam}
+              disabled={saving === 'team_members'}
+              className="btn-primary text-sm ml-auto"
+            >
+              {saving === 'team_members' ? 'Saving…' : 'Save team'}
+            </button>
+          </div>
+        </div>
+
         {/* Auto-scheduling */}
         <div className="card p-5 space-y-3">
           <h2 className="text-sm font-semibold text-gray-900">Auto-scheduling</h2>
@@ -160,24 +206,6 @@ export default function SettingsPage() {
             })}
           </div>
           <p className="text-xs text-gray-400">To skip a cycle, simply create a new one manually on a different schedule — the auto-create step is skipped whenever a cycle is already active.</p>
-        </div>
-
-        {/* Database init */}
-        <div className="card p-5 space-y-3">
-          <h2 className="text-sm font-semibold text-gray-900">Database</h2>
-          <p className="text-xs text-gray-500">
-            Run on first deploy to create all tables. Safe to re-run (uses CREATE IF NOT EXISTS).
-          </p>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleInitDb}
-              disabled={initLoading}
-              className="btn-secondary text-sm"
-            >
-              {initLoading ? 'Initializing…' : 'Initialize database'}
-            </button>
-            {initMsg && <span className="text-xs text-gray-600">{initMsg}</span>}
-          </div>
         </div>
       </div>
     </div>

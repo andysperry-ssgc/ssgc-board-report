@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import type { Cycle, Report, Submission } from '@/types'
-import { TEAM_MEMBERS } from '@/lib/team'
+import type { Cycle, Report, Submission, TeamMember } from '@/types'
+import { mergeRoster } from '@/lib/team'
 import { buildPrintHtml, fetchLogoBase64 } from '@/lib/report-html'
 
 interface CycleWithReport extends Cycle {
@@ -14,6 +14,7 @@ export default function AdminArchivePage() {
   const [loading, setLoading] = useState(true)
   const [expandedCycle, setExpandedCycle] = useState<number | null>(null)
   const [cycleSubmissions, setCycleSubmissions] = useState<Record<number, Submission[]>>({})
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
   const [loadingSubmissions, setLoadingSubmissions] = useState<number | null>(null)
   const [deletingReport, setDeletingReport] = useState<number | null>(null)
   const [draftCycleIds, setDraftCycleIds] = useState<Set<number>>(new Set())
@@ -46,12 +47,15 @@ export default function AdminArchivePage() {
   async function load() {
     setLoading(true)
     try {
-      const [cycleRes, reportRes] = await Promise.all([
+      const [cycleRes, reportRes, teamRes] = await Promise.all([
         fetch('/api/cycles'),
         fetch('/api/reports'),
+        fetch('/api/team'),
       ])
       const cycleData = await cycleRes.json()
       const reportData = await reportRes.json()
+      const teamData = await teamRes.json()
+      setTeamMembers(teamData.members ?? [])
 
       const allCycles: Cycle[] = cycleData.cycles ?? []
       const allReports: Report[] = reportData.reports ?? []
@@ -292,7 +296,7 @@ export default function AdminArchivePage() {
                               <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">
                                 Submissions
                               </p>
-                              {TEAM_MEMBERS.map((member) => {
+                              {mergeRoster(teamMembers, subs).map((member) => {
                                 const sub = subs.find((s) => s.person_name === member.name)
                                 return (
                                   <SubRow key={member.name} name={member.name} submission={sub} />

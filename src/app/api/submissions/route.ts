@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentCycle, getSubmissionsForCycle, upsertSubmission, getSubmissionStatus } from '@/lib/cycles'
-import { getTeamNames } from '@/lib/team'
+import { getTeamNames } from '@/lib/team-store'
 
 export async function GET(req: NextRequest) {
   try {
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    const teamNames = getTeamNames()
+    const teamNames = await getTeamNames()
     if (!teamNames.includes(person_name)) {
       return NextResponse.json({ error: 'Invalid team member name' }, { status: 400 })
     }

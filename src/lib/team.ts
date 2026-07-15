@@ -35,3 +35,31 @@ export function parseTeamList(raw: string): TeamMember[] {
       firstName: name.split(' ')[0],
     }))
 }
+
+/** Serialize a roster back to the newline-delimited form stored in settings. */
+export function serializeTeamList(members: { name: string }[]): string {
+  return members
+    .map((m) => m.name.trim())
+    .filter(Boolean)
+    .join('\n')
+}
+
+/**
+ * Merge a base roster with anyone who appears in `submissions` but isn't on it.
+ * Keeps historical submitters (e.g. someone since removed from the team) visible
+ * in past-cycle views while still showing current members who haven't submitted.
+ */
+export function mergeRoster(
+  base: TeamMember[],
+  submissions: { person_name: string }[],
+): TeamMember[] {
+  const known = new Set(base.map((m) => m.name))
+  const extra: TeamMember[] = []
+  for (const s of submissions) {
+    if (!known.has(s.person_name)) {
+      known.add(s.person_name)
+      extra.push({ name: s.person_name, firstName: s.person_name.split(' ')[0] })
+    }
+  }
+  return [...base, ...extra]
+}

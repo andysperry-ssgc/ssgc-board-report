@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import type { Cycle, Submission, SubmissionStatus } from '@/types'
-import { TEAM_MEMBERS } from '@/lib/team'
+import { mergeRoster } from '@/lib/team'
 import { buildPrintHtml, fetchLogoBase64 } from '@/lib/report-html'
 
 export default function Dashboard() {
@@ -253,8 +253,7 @@ export default function Dashboard() {
             <div>
               <h2 className="text-sm font-semibold text-gray-700 mb-3">Submissions — {cycle.label}</h2>
               <div className="space-y-2">
-                {TEAM_MEMBERS.map((member) => {
-                  const status = statuses.find((s) => s.name === member.name)
+                {mergeRoster(statuses, submissions).map((member) => {
                   const sub = submissions.find((s) => s.person_name === member.name)
                   const isExpanded = expanded === member.name
 
@@ -267,7 +266,7 @@ export default function Dashboard() {
                         <div className="flex items-center gap-3">
                           <span
                             className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                              status?.submitted ? 'bg-green-400' : 'bg-amber-400'
+                              sub ? 'bg-green-400' : 'bg-amber-400'
                             }`}
                           />
                           <span className="text-sm font-medium text-gray-900">{member.name}</span>

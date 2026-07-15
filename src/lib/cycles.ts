@@ -1,6 +1,6 @@
 import { sql } from '@/lib/db'
 import type { Cycle, Submission, SubmissionStatus } from '@/types'
-import { TEAM_MEMBERS } from './team'
+import { getTeamMembers } from './team-store'
 
 export async function getCurrentCycle(): Promise<Cycle | null> {
   const result = await sql<Cycle>`
@@ -108,8 +108,9 @@ export async function upsertSubmission(
 export async function getSubmissionStatus(cycleId: number): Promise<SubmissionStatus[]> {
   const submissions = await getSubmissionsForCycle(cycleId)
   const submittedNames = new Set(submissions.map((s) => s.person_name))
+  const members = await getTeamMembers()
 
-  return TEAM_MEMBERS.map((member) => {
+  return members.map((member) => {
     const sub = submissions.find((s) => s.person_name === member.name)
     return {
       name: member.name,

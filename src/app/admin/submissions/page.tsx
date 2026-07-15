@@ -1,15 +1,17 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import type { Cycle, Submission } from '@/types'
-import { TEAM_MEMBERS } from '@/lib/team'
+import type { Cycle, Submission, SubmissionStatus, TeamMember } from '@/types'
+import { mergeRoster } from '@/lib/team'
 
 export default function SubmissionsPage() {
   const [cycle, setCycle] = useState<Cycle | null>(null)
   const [submissions, setSubmissions] = useState<Submission[]>([])
+  const [statuses, setStatuses] = useState<SubmissionStatus[]>([])
   const [allCycles, setAllCycles] = useState<Cycle[]>([])
   const [selectedCycleId, setSelectedCycleId] = useState<number | null>(null)
   const [cycleSubmissions, setCycleSubmissions] = useState<Submission[]>([])
+  const [cycleStatuses, setCycleStatuses] = useState<SubmissionStatus[]>([])
   const [expanded, setExpanded] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -23,6 +25,7 @@ export default function SubmissionsPage() {
       const cycleData = await cycleRes.json()
       setCycle(subData.cycle)
       setSubmissions(subData.submissions ?? [])
+      setStatuses(subData.statuses ?? [])
       setAllCycles(cycleData.cycles ?? [])
       setLoading(false)
     }
@@ -34,6 +37,7 @@ export default function SubmissionsPage() {
     const res = await fetch(`/api/submissions?cycle_id=${cycleId}`)
     const data = await res.json()
     setCycleSubmissions(data.submissions ?? [])
+    setCycleStatuses(data.statuses ?? [])
   }
 
   const pastCycles = allCycles.filter((c) => !c.is_current)
@@ -55,7 +59,7 @@ export default function SubmissionsPage() {
               <div className="card p-5 text-sm text-gray-500">No active cycle.</div>
             ) : (
               <SubmissionList
-                members={TEAM_MEMBERS}
+                members={mergeRoster(statuses, submissions)}
                 submissions={submissions}
                 expanded={expanded}
                 setExpanded={setExpanded}
@@ -88,7 +92,7 @@ export default function SubmissionsPage() {
                     {selectedCycleId === c.id && (
                       <div className="border-t border-gray-100">
                         <SubmissionList
-                          members={TEAM_MEMBERS}
+                          members={mergeRoster(cycleStatuses, cycleSubmissions)}
                           submissions={cycleSubmissions}
                           expanded={expanded}
                           setExpanded={setExpanded}
@@ -114,7 +118,7 @@ function SubmissionList({
   setExpanded,
   nested = false,
 }: {
-  members: typeof TEAM_MEMBERS
+  members: TeamMember[]
   submissions: Submission[]
   expanded: string | null
   setExpanded: (v: string | null) => void
