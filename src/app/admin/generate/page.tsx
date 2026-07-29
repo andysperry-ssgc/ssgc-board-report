@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import type { Cycle, Submission, SubmissionStatus } from '@/types'
 import { buildPrintHtml, fetchLogoBase64 } from '@/lib/report-html'
+import AdminSubmissionEditor from '@/components/AdminSubmissionEditor'
 
 function draftKey(cycleId: number | null) {
   return `report_draft_${cycleId ?? 'none'}`
@@ -27,6 +28,18 @@ function GeneratePageInner() {
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [statuses, setStatuses] = useState<SubmissionStatus[]>([])
   const [hasDraft, setHasDraft] = useState(false)
+  const [editingMember, setEditingMember] = useState<string | null>(null)
+
+  async function loadCycleData(cycleId: number) {
+    try {
+      const res = await fetch(`/api/submissions?cycle_id=${cycleId}`)
+      const data = await res.json()
+      setSubmissions(data.submissions ?? [])
+      setStatuses(data.statuses ?? [])
+    } catch {
+      // leave existing data in place on failure
+    }
+  }
 
   // Load cycles and any existing saved report on mount
   useEffect(() => {
@@ -75,13 +88,7 @@ function GeneratePageInner() {
   useEffect(() => {
     if (!selectedCycleId) return
 
-    fetch(`/api/submissions?cycle_id=${selectedCycleId}`)
-      .then(r => r.json())
-      .then(data => {
-        setSubmissions(data.submissions ?? [])
-        setStatuses(data.statuses ?? [])
-      })
-      .catch(() => {})
+    loadCycleData(selectedCycleId)
 
     const draft = localStorage.getItem(draftKey(selectedCycleId))
     if (draft) {
@@ -195,7 +202,6 @@ function GeneratePageInner() {
 
   const selectedCycle = allCycles.find(c => c.id === selectedCycleId)
   const submitted = statuses.filter(s => s.submitted)
-  const pending = statuses.filter(s => !s.submitted)
 
   return (
     <div>
@@ -282,20 +288,25 @@ function GeneratePageInner() {
                 Submissions — {selectedCycle.label}
               </p>
               <div className="space-y-1">
-                {submitted.map(m => (
-                  <div key={m.name} className="flex items-center gap-2 text-xs text-gray-700">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
-                    {m.name}
-                  </div>
-                ))}
-                {pending.map(m => (
-                  <div key={m.name} className="flex items-center gap-2 text-xs text-gray-400">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-300 flex-shrink-0" />
-                    {m.name}
+                {statuses.map(s => (
+                  <div key={s.name} className="flex items-center justify-between gap-2 group">
+                    <div className="flex items-center gap-2 text-xs min-w-0">
+                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.submitted ? 'bg-green-400' : 'bg-amber-300'}`} />
+                      <span className={`truncate ${s.submitted ? 'text-gray-700' : 'text-gray-400'}`}>{s.name}</span>
+                    </div>
+                    <button
+                      onClick={() => setEditingMember(s.name)}
+                      className="btn-ghost text-xs flex-shrink-0"
+                    >
+                      {s.submitted ? 'Edit' : 'Add'}
+                    </button>
                   </div>
                 ))}
               </div>
               <p className="text-xs text-gray-400">{submitted.length} of {statuses.length} submitted</p>
+              <p className="text-xs text-gray-400">
+                Add or correct any input on someone&apos;s behalf, then regenerate.
+              </p>
             </div>
           )}
         </div>
@@ -376,6 +387,16 @@ function GeneratePageInner() {
           )}
         </div>
       </div>
+
+      {editingMember && selectedCycleId && (
+        <AdminSubmissionEditor
+          cycleId={selectedCycleId}
+          personName={editingMember}
+          existing={submissions.find(s => s.person_name === editingMember) ?? null}
+          onClose={() => setEditingMember(null)}
+          onSaved={() => { setEditingMember(null); loadCycleData(selectedCycleId) }}
+        />
+      )}
     </div>
   )
 }
