@@ -1,6 +1,7 @@
 import { sql } from '@/lib/db'
 import type { Cycle, Submission, SubmissionStatus } from '@/types'
 import { getTeamMembers } from './team-store'
+import { displayNameFor } from './team'
 
 export async function getCurrentCycle(): Promise<Cycle | null> {
   const result = await sql<Cycle>`
@@ -115,6 +116,7 @@ export async function getSubmissionStatus(cycleId: number): Promise<SubmissionSt
     return {
       name: member.name,
       firstName: member.firstName,
+      displayName: displayNameFor(member, members),
       submitted: submittedNames.has(member.name),
       submitted_at: sub?.submitted_at,
     }

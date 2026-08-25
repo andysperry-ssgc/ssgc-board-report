@@ -36,6 +36,32 @@ export function parseTeamList(raw: string): TeamMember[] {
     }))
 }
 
+function lastInitial(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/)
+  const last = parts.length > 1 ? parts[parts.length - 1] : ''
+  return last ? last[0].toUpperCase() : ''
+}
+
+/**
+ * A short display label for a member: the first name when it's unique across the
+ * roster, otherwise disambiguated with a last-name initial ("Michael H."), and
+ * the full name as a last resort if even that still collides.
+ */
+export function displayNameFor(member: TeamMember, roster: TeamMember[]): string {
+  const sameFirst = roster.filter((m) => m.firstName === member.firstName)
+  if (sameFirst.length <= 1) return member.firstName
+
+  const li = lastInitial(member.name)
+  if (!li) return member.name
+
+  const candidate = `${member.firstName} ${li}.`
+  const collisions = sameFirst.filter((m) => {
+    const mli = lastInitial(m.name)
+    return mli !== '' && `${m.firstName} ${mli}.` === candidate
+  })
+  return collisions.length <= 1 ? candidate : member.name
+}
+
 /** Serialize a roster back to the newline-delimited form stored in settings. */
 export function serializeTeamList(members: { name: string }[]): string {
   return members

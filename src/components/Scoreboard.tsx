@@ -61,7 +61,7 @@ export default function Scoreboard({ statuses, cycle, isClosed = false }: Props)
               <div key={s.name} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
-                  <span className="text-sm text-gray-800">{s.firstName}</span>
+                  <span className="text-sm text-gray-800">{s.displayName}</span>
                 </div>
                 {s.submitted_at && (
                   <span className="text-xs text-gray-400">
@@ -85,7 +85,7 @@ export default function Scoreboard({ statuses, cycle, isClosed = false }: Props)
             {pending.map((s) => (
               <div key={s.name} className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
-                <span className="text-sm text-gray-500">{s.firstName}</span>
+                <span className="text-sm text-gray-500">{s.displayName}</span>
               </div>
             ))}
           </div>

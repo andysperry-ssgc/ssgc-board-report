@@ -123,9 +123,9 @@ export function getTemplateVars(
   return {
     cycleLabel,
     submissionUrl,
-    teamNames:     statuses.map(s => s.firstName).join(' '),
-    submittedList: submitted.length === 0 ? '_None yet_' : submitted.map(s => `✅ ${s.firstName}`).join('  '),
-    pendingList:   pending.length   === 0 ? '_Everyone is in!_' : pending.map(s => `⏳ ${s.firstName}`).join('  '),
+    teamNames:     statuses.map(s => s.displayName).join(' '),
+    submittedList: submitted.length === 0 ? '_None yet_' : submitted.map(s => `✅ ${s.displayName}`).join('  '),
+    pendingList:   pending.length   === 0 ? '_Everyone is in!_' : pending.map(s => `⏳ ${s.displayName}`).join('  '),
     pendingNames:  pending.map(s => s.name).join(', '),
   }
 }

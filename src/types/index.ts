@@ -60,6 +60,8 @@ export interface TeamMember {
 export interface SubmissionStatus {
   name: string
   firstName: string
+  /** Short label, unique across the roster: first name, or "First L." when first names collide. */
+  displayName: string
   submitted: boolean
   submitted_at?: string
 }
