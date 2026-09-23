@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import type { Cycle, Submission, SubmissionStatus } from '@/types'
 import { mergeRoster } from '@/lib/team'
-import { buildPrintHtml, fetchLogoBase64 } from '@/lib/report-html'
 
 export default function Dashboard() {
   const [cycle, setCycle] = useState<Cycle | null>(null)
@@ -23,39 +22,37 @@ export default function Dashboard() {
   const [cycleError, setCycleError] = useState('')
   const [cycleLoading, setCycleLoading] = useState(false)
 
-  // Generate panel
-  const [generating, setGenerating] = useState(false)
-  const [reportContent, setReportContent] = useState('')
-  const [generateError, setGenerateError] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
+  // Report status for the current cycle (report work happens on the Generate page)
+  const [reportSaved, setReportSaved] = useState(false)
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null)
 
   useEffect(() => { load() }, [])
 
   async function load() {
     setLoading(true)
     try {
-      const [subRes, reportRes] = await Promise.all([
+      const [subRes, reportRes, draftRes] = await Promise.all([
         fetch('/api/submissions'),
         fetch('/api/reports'),
+        fetch('/api/drafts'),
       ])
       const subData = await subRes.json()
       const reportData = await reportRes.json()
+      const draftData = draftRes.ok ? await draftRes.json() : { drafts: [] }
 
       const currentCycle = subData.cycle ?? null
       setCycle(currentCycle)
       setSubmissions(subData.submissions ?? [])
       setStatuses(subData.statuses ?? [])
 
-      // Pre-load any existing report for the current cycle
       if (currentCycle) {
-        const existing = (reportData.reports ?? []).find(
-          (r: { cycle_id: number; content: string }) => r.cycle_id === currentCycle.id
+        setReportSaved((reportData.reports ?? []).some(
+          (r: { cycle_id: number }) => r.cycle_id === currentCycle.id
+        ))
+        const draft = (draftData.drafts ?? []).find(
+          (d: { cycle_id: number }) => d.cycle_id === currentCycle.id
         )
-        if (existing) {
-          setReportContent(existing.content)
-          setSaved(true)
-        }
+        setDraftSavedAt(draft?.updated_at ?? null)
       }
     } finally {
       setLoading(false)
@@ -82,65 +79,6 @@ export default function Dashboard() {
     } finally {
       setCycleLoading(false)
     }
-  }
-
-  async function handleGenerate() {
-    if (!cycle) return
-    setGenerating(true)
-    setGenerateError('')
-    setSaved(false)
-    setReportContent('')
-    try {
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ period: cycle.label, type: cycle.type, cycle_id: cycle.id }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Generation failed')
-      setReportContent(data.content)
-      // Scroll to the generate section
-      setTimeout(() => {
-        document.getElementById('generate-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      }, 100)
-    } catch (err) {
-      setGenerateError(err instanceof Error ? err.message : 'Generation failed')
-    } finally {
-      setGenerating(false)
-    }
-  }
-
-  async function handleSave() {
-    if (!reportContent.trim() || !cycle) return
-    setSaving(true)
-    try {
-      const res = await fetch('/api/reports', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          period: cycle.label,
-          type: cycle.type,
-          content: reportContent,
-          cycle_id: cycle.id,
-          source: 'generated',
-        }),
-      })
-      if (!res.ok) throw new Error('Failed to save')
-      setSaved(true)
-    } catch (err) {
-      setGenerateError(err instanceof Error ? err.message : 'Save failed')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function handlePrint() {
-    const logo = await fetchLogoBase64()
-    const win = window.open('', '_blank')
-    if (!win || !cycle) return
-    win.document.write(buildPrintHtml(cycle.label, reportContent, logo))
-    win.document.close()
-    setTimeout(() => win.print(), 600)
   }
 
   const submitted = statuses.filter((s) => s.submitted).length
@@ -310,73 +248,28 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Generate report panel */}
+          {/* Board report status — generating and editing happen on the Generate page */}
           {cycle && (
-            <div id="generate-panel" className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-gray-700">Generate report — {cycle.label}</h2>
-                {reportContent && (
-                  <div className="flex items-center gap-2">
-                    <button onClick={handlePrint} className="btn-secondary text-xs">
-                      Download PDF
-                    </button>
-                    <button
-                      onClick={handleSave}
-                      disabled={saving || saved}
-                      className="btn-primary text-xs"
-                    >
-                      {saving ? 'Saving…' : saved ? '✓ Saved to archive' : 'Save to archive'}
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {generateError && (
-                <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
-                  {generateError}
-                </div>
-              )}
-
-              {reportContent ? (
-                <div className="space-y-2">
-                  {!saved && (
-                    <p className="text-xs text-amber-600">Not yet saved to archive — save when ready.</p>
+            <div className="card p-6 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-gray-700">Board report — {cycle.label}</p>
+                <p className="text-xs mt-0.5">
+                  {reportSaved ? (
+                    <span className="text-green-700">✓ Saved to archive</span>
+                  ) : draftSavedAt ? (
+                    <span className="text-amber-600">
+                      Draft in progress · saved {new Date(draftSavedAt).toLocaleString('en-US', {
+                        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+                      })}
+                    </span>
+                  ) : (
+                    <span className="text-gray-400">Not started · {submitted} of {total} submissions in</span>
                   )}
-                  <textarea
-                    className="textarea font-mono text-xs min-h-[500px]"
-                    value={reportContent}
-                    onChange={(e) => { setReportContent(e.target.value); setSaved(false) }}
-                  />
-                </div>
-              ) : (
-                <div className="card p-6 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">
-                      {generating ? 'Generating report…' : 'Ready to generate'}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {generating
-                        ? 'This takes 15–30 seconds.'
-                        : `Using ${submitted} of ${total} submissions from ${cycle.label}`}
-                    </p>
-                  </div>
-                  <button
-                    onClick={handleGenerate}
-                    disabled={generating}
-                    className="btn-primary text-sm flex-shrink-0"
-                  >
-                    {generating ? (
-                      <span className="flex items-center gap-2">
-                        <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                        </svg>
-                        Generating…
-                      </span>
-                    ) : 'Generate report'}
-                  </button>
-                </div>
-              )}
+                </p>
+              </div>
+              <a href={`/admin/generate?cycle_id=${cycle.id}`} className="btn-primary text-sm flex-shrink-0">
+                {reportSaved ? 'View report' : draftSavedAt ? 'Continue draft' : 'Generate report'}
+              </a>
             </div>
           )}
         </>

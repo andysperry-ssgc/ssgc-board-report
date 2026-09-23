@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import type { Cycle, Submission, SubmissionStatus } from '@/types'
+import type { Cycle, Report, Submission, SubmissionStatus } from '@/types'
 import { buildPrintHtml, buildSubmissionsPrintHtml, fetchLogoBase64, printInNewWindow } from '@/lib/report-html'
 import AdminSubmissionEditor from '@/components/AdminSubmissionEditor'
 
@@ -27,8 +27,20 @@ function GeneratePageInner() {
   const [selectedCycleId, setSelectedCycleId] = useState<number | null>(urlCycleId)
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [statuses, setStatuses] = useState<SubmissionStatus[]>([])
+  const [reports, setReports] = useState<Report[]>([])
   const [hasDraft, setHasDraft] = useState(false)
+  const [draftStatus, setDraftStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null)
+  const [manualEdit, setManualEdit] = useState(false)
   const [editingMember, setEditingMember] = useState<string | null>(null)
+
+  // Content as last stored on the server (draft or archived report) — edits
+  // that differ from it are unsaved. activeCycle guards against a slow response
+  // for a previously selected cycle overwriting the current one.
+  const persisted = useRef('')
+  const activeCycle = useRef<number | null>(urlCycleId)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const latest = useRef({ cycleId: urlCycleId as number | null, content: '' })
 
   async function loadCycleData(cycleId: number) {
     try {
@@ -41,7 +53,86 @@ function GeneratePageInner() {
     }
   }
 
-  // Load cycles and any existing saved report on mount
+  async function putDraft(cycleId: number, text: string): Promise<boolean> {
+    setDraftStatus('saving')
+    try {
+      const res = await fetch('/api/drafts', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cycle_id: cycleId, content: text }),
+      })
+      if (!res.ok) throw new Error('Failed to save draft')
+      const data = await res.json()
+      if (activeCycle.current === cycleId) {
+        persisted.current = text
+        setDraftSavedAt(data.updated_at ?? new Date().toISOString())
+        setDraftStatus('saved')
+        setHasDraft(true)
+      }
+      return true
+    } catch {
+      if (activeCycle.current === cycleId) setDraftStatus('error')
+      return false
+    }
+  }
+
+  // Save any unsaved edits right away (before switching cycles).
+  async function flushDraft() {
+    if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null }
+    const { cycleId, content: text } = latest.current
+    if (cycleId && text.trim() && text !== persisted.current) await putDraft(cycleId, text)
+  }
+
+  // Load what belongs in the editor for a cycle: its server draft if one exists,
+  // otherwise its archived report, otherwise nothing.
+  async function loadCycleContent(cycleId: number, reportList: Report[]) {
+    activeCycle.current = cycleId
+    persisted.current = ''
+    setContent('')
+    setSaved(false)
+    setHasDraft(false)
+    setDraftStatus('idle')
+    setDraftSavedAt(null)
+    setManualEdit(false)
+    setTruncated(false)
+
+    let draft: { content: string; updated_at: string } | null = null
+    try {
+      const res = await fetch(`/api/drafts?cycle_id=${cycleId}`)
+      if (res.ok) draft = (await res.json()).draft ?? null
+    } catch { /* fall through to archived report */ }
+    if (activeCycle.current !== cycleId) return
+
+    // One-time move of a draft the previous version kept only in this browser.
+    let legacy: string | null = null
+    try { legacy = localStorage.getItem(draftKey(cycleId)) } catch { /* storage unavailable */ }
+    if (!draft && legacy) {
+      setContent(legacy)
+      setHasDraft(true)
+      if (await putDraft(cycleId, legacy)) {
+        try { localStorage.removeItem(draftKey(cycleId)) } catch { /* ignore */ }
+      }
+      return
+    }
+    if (legacy) { try { localStorage.removeItem(draftKey(cycleId)) } catch { /* ignore */ } }
+
+    if (draft) {
+      persisted.current = draft.content
+      setContent(draft.content)
+      setHasDraft(true)
+      setDraftStatus('saved')
+      setDraftSavedAt(draft.updated_at)
+      return
+    }
+    const archived = reportList.find(r => r.cycle_id === cycleId)
+    if (archived) {
+      persisted.current = archived.content
+      setContent(archived.content)
+      setSaved(true)
+    }
+  }
+
+  // Load cycles and reports on mount, then the resolved cycle's content
   useEffect(() => {
     Promise.all([
       fetch('/api/submissions').then(r => r.json()),
@@ -49,86 +140,84 @@ function GeneratePageInner() {
       fetch('/api/reports').then(r => r.json()),
     ]).then(([subData, cycleData, reportData]) => {
       const cycles: Cycle[] = cycleData.cycles ?? []
-      const reports = reportData.reports ?? []
+      const reportList: Report[] = reportData.reports ?? []
       setAllCycles(cycles)
+      setReports(reportList)
 
-      let resolvedId: number | null = null
-      if (urlCycleId) {
-        const c = cycles.find(c => c.id === urlCycleId)
-        if (c) { setPeriod(c.label); setType(c.type) }
-        resolvedId = urlCycleId
-      } else if (subData.cycle) {
-        setSelectedCycleId(subData.cycle.id)
-        setPeriod(subData.cycle.label)
-        setType(subData.cycle.type)
-        resolvedId = subData.cycle.id
-      } else if (cycles.length > 0) {
-        const latest = cycles[0]
-        setSelectedCycleId(latest.id)
-        setPeriod(latest.label)
-        setType(latest.type)
-        resolvedId = latest.id
-      }
+      let resolved: Cycle | null = null
+      if (urlCycleId) resolved = cycles.find(c => c.id === urlCycleId) ?? null
+      else if (subData.cycle) resolved = subData.cycle
+      else if (cycles.length > 0) resolved = cycles[0]
 
-      // Pre-load saved report if no localStorage draft exists
-      if (resolvedId) {
-        const draft = localStorage.getItem(draftKey(resolvedId))
-        if (!draft) {
-          const saved = reports.find((r: { cycle_id: number; content: string }) => r.cycle_id === resolvedId)
-          if (saved) {
-            setContent(saved.content)
-            setSaved(true)
-          }
-        }
+      if (resolved) {
+        setSelectedCycleId(resolved.id)
+        setPeriod(resolved.label)
+        setType(resolved.type)
+        loadCycleContent(resolved.id, reportList)
       }
     }).catch(() => {})
   }, [urlCycleId])
 
-  // Load submissions and check for draft whenever selected cycle changes
+  // Submissions for the selected cycle
   useEffect(() => {
-    if (!selectedCycleId) return
-
-    loadCycleData(selectedCycleId)
-
-    const draft = localStorage.getItem(draftKey(selectedCycleId))
-    if (draft) {
-      setHasDraft(true)
-      // Only auto-restore if editor is empty
-      setContent(prev => prev || draft)
-    } else {
-      setHasDraft(false)
-    }
+    if (selectedCycleId) loadCycleData(selectedCycleId)
   }, [selectedCycleId])
 
-  // Auto-save draft to localStorage on every content change
+  // Autosave: persist edits to the server shortly after typing stops
   useEffect(() => {
-    if (!content || !selectedCycleId) return
-    localStorage.setItem(draftKey(selectedCycleId), content)
-    setHasDraft(true)
+    latest.current = { cycleId: selectedCycleId, content }
+    if (!selectedCycleId || !content.trim() || content === persisted.current) return
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    const cycleId = selectedCycleId
+    const text = content
+    saveTimer.current = setTimeout(() => {
+      saveTimer.current = null
+      if (text !== persisted.current) putDraft(cycleId, text)
+    }, 1000)
+    return () => { if (saveTimer.current) clearTimeout(saveTimer.current) }
   }, [content, selectedCycleId])
 
-  function handleCycleSelect(cycleId: number) {
-    const c = allCycles.find(c => c.id === cycleId)
-    if (c) {
-      setSelectedCycleId(c.id)
-      setPeriod(c.label)
-      setType(c.type)
-      setContent('')
-      setSaved(false)
-      setError('')
+  // Leaving the page (tab close, reload, or in-app navigation) with unsaved
+  // edits: send them with keepalive so the request outlives the page.
+  useEffect(() => {
+    function flushOnExit() {
+      const { cycleId, content: text } = latest.current
+      if (!cycleId || !text.trim() || text === persisted.current) return
+      fetch('/api/drafts', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cycle_id: cycleId, content: text }),
+        keepalive: true,
+      }).catch(() => {})
+      persisted.current = text
     }
+    window.addEventListener('pagehide', flushOnExit)
+    return () => { window.removeEventListener('pagehide', flushOnExit); flushOnExit() }
+  }, [])
+
+  async function handleCycleSelect(cycleId: number) {
+    const c = allCycles.find(c => c.id === cycleId)
+    if (!c) return
+    await flushDraft()
+    setSelectedCycleId(c.id)
+    setPeriod(c.label)
+    setType(c.type)
+    setError('')
+    loadCycleContent(c.id, reports)
   }
 
-  function handleRestoreDraft() {
-    const draft = localStorage.getItem(draftKey(selectedCycleId))
-    if (draft) { setContent(draft); setSaved(false) }
-  }
-
-  function handleDiscardDraft() {
-    localStorage.removeItem(draftKey(selectedCycleId))
-    setContent('')
-    setHasDraft(false)
-    setSaved(false)
+  async function handleDiscardDraft() {
+    if (!selectedCycleId) return
+    if (!confirm('Discard this draft? Unsaved changes will be lost. An archived report, if any, is not affected.')) return
+    if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null }
+    try {
+      const res = await fetch(`/api/drafts?cycle_id=${selectedCycleId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error()
+    } catch {
+      setError('Could not discard the draft. Please try again.')
+      return
+    }
+    loadCycleContent(selectedCycleId, reports)
   }
 
   async function handleGenerate() {
@@ -136,7 +225,6 @@ function GeneratePageInner() {
     setGenerating(true)
     setError('')
     setTruncated(false)
-    setSaved(false)
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -157,8 +245,11 @@ function GeneratePageInner() {
         )
       }
       if (!res.ok) throw new Error(data.error || 'Generation failed')
+      setSaved(false)
       setContent(data.content ?? '')
       setTruncated(!!data.truncated)
+      // Persist immediately rather than waiting for the autosave delay.
+      if (selectedCycleId && data.content?.trim()) putDraft(selectedCycleId, data.content)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Generation failed')
     } finally {
@@ -169,6 +260,7 @@ function GeneratePageInner() {
   async function handleSave() {
     if (!content.trim()) return
     setSaving(true)
+    setError('')
     try {
       const res = await fetch('/api/reports', {
         method: 'POST',
@@ -180,10 +272,20 @@ function GeneratePageInner() {
         }),
       })
       if (!res.ok) throw new Error('Failed to save')
+      const data = await res.json()
+      if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null }
+      persisted.current = content
       setSaved(true)
-      // Clear draft once officially saved
-      localStorage.removeItem(draftKey(selectedCycleId))
+      if (data.report) {
+        setReports(prev => [data.report, ...prev.filter(r => r.cycle_id !== data.report.cycle_id)])
+      }
+      // The archive now holds this content; the draft is no longer needed.
+      if (selectedCycleId) {
+        await fetch(`/api/drafts?cycle_id=${selectedCycleId}`, { method: 'DELETE' }).catch(() => {})
+      }
       setHasDraft(false)
+      setDraftStatus('idle')
+      setDraftSavedAt(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed')
     } finally {
@@ -332,44 +434,58 @@ function GeneratePageInner() {
             </div>
           )}
 
-          {/* Draft restore banner */}
-          {hasDraft && !content && (
-            <div className="mb-3 flex items-center justify-between bg-amber-50 border border-amber-200 rounded px-3 py-2">
-              <p className="text-xs text-amber-700">You have an unsaved draft for this cycle.</p>
-              <div className="flex gap-2 ml-3 flex-shrink-0">
-                <button onClick={handleRestoreDraft} className="text-xs text-amber-700 underline hover:text-amber-900">
-                  Restore
-                </button>
-                <button onClick={handleDiscardDraft} className="text-xs text-gray-400 hover:text-gray-600">
-                  Discard
-                </button>
-              </div>
-            </div>
-          )}
-
-          {content ? (
+          {content || manualEdit ? (
             <div className="space-y-3">
               <p className="text-xs text-gray-500">Edit below if needed, then save to archive and/or download PDF.</p>
               <textarea
                 className="textarea font-mono text-xs min-h-[600px]"
                 value={content}
+                placeholder="Paste or write the report here…"
+                autoFocus={manualEdit && !content}
                 onChange={(e) => { setContent(e.target.value); setSaved(false) }}
               />
               <div className="flex items-center gap-3 pt-1">
-                <button onClick={handlePrint} className="btn-secondary text-sm">
+                <button onClick={handlePrint} disabled={!content.trim()} className="btn-secondary text-sm">
                   Download PDF
                 </button>
                 <button
                   onClick={handleSave}
-                  disabled={saving || saved}
+                  disabled={saving || saved || !content.trim()}
                   className="btn-primary text-sm"
                 >
                   {saving ? 'Saving…' : saved ? '✓ Saved to archive' : 'Save to archive'}
                 </button>
-                {!saved && (
-                  <p className="text-xs text-amber-600">Not yet saved to archive</p>
-                )}
               </div>
+              {!saved && (
+                <div className="flex items-center justify-between gap-3 text-xs">
+                  {draftStatus === 'saving' ? (
+                    <p className="text-gray-500">Saving draft…</p>
+                  ) : draftStatus === 'error' ? (
+                    <p className="text-red-600">
+                      Couldn&apos;t save the draft. Keep this tab open.{' '}
+                      <button
+                        onClick={() => selectedCycleId && putDraft(selectedCycleId, content)}
+                        className="underline hover:text-red-800"
+                      >
+                        Retry
+                      </button>
+                    </p>
+                  ) : draftStatus === 'saved' && draftSavedAt ? (
+                    <p className="text-green-700">
+                      ✓ Draft saved {new Date(draftSavedAt).toLocaleString('en-US', {
+                        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+                      })} · safe to leave and come back · not yet in the archive
+                    </p>
+                  ) : (
+                    <p className="text-amber-600">Not yet saved</p>
+                  )}
+                  {hasDraft && (
+                    <button onClick={handleDiscardDraft} className="text-gray-400 hover:text-red-600 flex-shrink-0">
+                      Discard draft
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <div className="card p-8 text-center text-sm text-gray-500 min-h-[300px] flex items-center justify-center">
@@ -390,6 +506,11 @@ function GeneratePageInner() {
                       ? `Using ${selectedCycle.label} submissions`
                       : 'Select a cycle and click Generate'}
                   </p>
+                  {selectedCycle && (
+                    <button onClick={() => setManualEdit(true)} className="btn-ghost text-xs mt-3">
+                      Or paste / write the report yourself
+                    </button>
+                  )}
                 </div>
               )}
             </div>

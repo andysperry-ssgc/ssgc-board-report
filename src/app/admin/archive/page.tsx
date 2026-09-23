@@ -31,17 +31,26 @@ export default function AdminArchivePage() {
 
   useEffect(() => { load() }, [])
 
-  // Check localStorage for unsaved drafts
+  // Unsaved drafts: stored server-side, plus any older browser-only draft that
+  // hasn't been moved to the server yet (moved when opened in Generate).
   useEffect(() => {
     const ids = new Set<number>()
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i)
-      if (key?.startsWith('report_draft_')) {
-        const id = Number(key.replace('report_draft_', ''))
-        if (!isNaN(id)) ids.add(id)
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key?.startsWith('report_draft_')) {
+          const id = Number(key.replace('report_draft_', ''))
+          if (!isNaN(id)) ids.add(id)
+        }
       }
-    }
-    setDraftCycleIds(ids)
+    } catch { /* storage unavailable */ }
+    fetch('/api/drafts')
+      .then(r => (r.ok ? r.json() : { drafts: [] }))
+      .then((data: { drafts?: { cycle_id: number }[] }) => {
+        for (const d of data.drafts ?? []) ids.add(d.cycle_id)
+      })
+      .catch(() => {})
+      .finally(() => setDraftCycleIds(new Set(ids)))
   }, [])
 
   async function load() {

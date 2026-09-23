@@ -109,6 +109,8 @@ export async function deleteSetting(key: string): Promise<void> {
 }
 
 export async function getAllSettings(): Promise<Record<string, string>> {
-  const result = await sql`SELECT key, value FROM settings`
+  // Report drafts share this table but are confidential and served only by the
+  // admin-only /api/drafts route, so never include them here.
+  const result = await sql`SELECT key, value FROM settings WHERE NOT starts_with(key, 'report_draft_')`
   return Object.fromEntries(result.rows.map((r) => [r.key, r.value]))
 }
