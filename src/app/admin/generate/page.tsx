@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import type { Cycle, Submission, SubmissionStatus } from '@/types'
-import { buildPrintHtml, fetchLogoBase64 } from '@/lib/report-html'
+import { buildPrintHtml, buildSubmissionsPrintHtml, fetchLogoBase64, printInNewWindow } from '@/lib/report-html'
 import AdminSubmissionEditor from '@/components/AdminSubmissionEditor'
 
 function draftKey(cycleId: number | null) {
@@ -307,6 +307,15 @@ function GeneratePageInner() {
               <p className="text-xs text-gray-400">
                 Add or correct any input on someone&apos;s behalf, then regenerate.
               </p>
+              <button
+                onClick={() => printInNewWindow(async () =>
+                  buildSubmissionsPrintHtml(selectedCycle.label, submissions, statuses, await fetchLogoBase64())
+                )}
+                disabled={submissions.length === 0}
+                className="btn-secondary text-xs w-full"
+              >
+                Download submissions PDF
+              </button>
             </div>
           )}
         </div>

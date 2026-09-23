@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import type { Cycle, Report, Submission, TeamMember } from '@/types'
 import { mergeRoster } from '@/lib/team'
-import { buildPrintHtml, fetchLogoBase64 } from '@/lib/report-html'
+import { buildPrintHtml, buildSubmissionsPrintHtml, fetchLogoBase64, printInNewWindow } from '@/lib/report-html'
 
 interface CycleWithReport extends Cycle {
   report?: Report
@@ -112,6 +112,15 @@ export default function AdminArchivePage() {
     win.document.write(buildPrintHtml(report.period, report.content, logo))
     win.document.close()
     setTimeout(() => win.print(), 600)
+  }
+
+  function handleSubmissionsPdf(cycle: Cycle) {
+    printInNewWindow(async () => {
+      const res = await fetch(`/api/submissions?cycle_id=${cycle.id}`)
+      if (!res.ok) throw new Error('Failed to load submissions')
+      const data = await res.json()
+      return buildSubmissionsPrintHtml(cycle.label, data.submissions ?? [], data.statuses ?? [], await fetchLogoBase64())
+    })
   }
 
   async function handleUpload(e: React.FormEvent) {
@@ -293,9 +302,19 @@ export default function AdminArchivePage() {
                             <div className="px-4 py-4 text-sm text-gray-400">Loading submissions…</div>
                           ) : (
                             <div className="px-4 py-3 space-y-2">
-                              <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">
-                                Submissions
-                              </p>
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+                                  Submissions
+                                </p>
+                                {subs.length > 0 && (
+                                  <button
+                                    onClick={() => handleSubmissionsPdf(c)}
+                                    className="btn-ghost text-xs"
+                                  >
+                                    Submissions PDF
+                                  </button>
+                                )}
+                              </div>
                               {mergeRoster(teamMembers, subs).map((member) => {
                                 const sub = subs.find((s) => s.person_name === member.name)
                                 return (
