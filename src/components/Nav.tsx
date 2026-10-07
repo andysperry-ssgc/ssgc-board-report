@@ -20,14 +20,6 @@ export default function Nav() {
             >
               Submit update
             </Link>
-            <Link
-              href="/archive"
-              className={`px-3 py-1.5 text-sm rounded transition-colors ${
-                path === '/archive' ? 'bg-brand-50 text-brand-700 font-medium' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-              }`}
-            >
-              Archive
-            </Link>
           </div>
           <Link
             href="/admin"

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentCycle, getSubmissionsForCycle, upsertSubmission, getSubmissionStatus } from '@/lib/cycles'
 import { getTeamNames } from '@/lib/team-store'
+import { requireAdmin } from '@/lib/auth'
 
 export async function GET(req: NextRequest) {
   try {
@@ -18,8 +19,13 @@ export async function GET(req: NextRequest) {
     if (!cycle) {
       return NextResponse.json({ cycle: null, submissions: [], statuses: [] })
     }
-    const submissions = await getSubmissionsForCycle(cycle.id)
     const statuses = await getSubmissionStatus(cycle.id)
+    // Full submission text is confidential: admins only. The public home page
+    // only needs the cycle and who has submitted (the scoreboard).
+    if (!(await requireAdmin())) {
+      return NextResponse.json({ cycle, submissions: [], statuses })
+    }
+    const submissions = await getSubmissionsForCycle(cycle.id)
     return NextResponse.json({ cycle, submissions, statuses })
   } catch (err) {
     console.error('GET /api/submissions error:', err)

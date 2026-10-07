@@ -5,6 +5,9 @@ import type { Report } from '@/types'
 
 export async function GET() {
   try {
+    if (!(await requireAdmin())) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
     const result = await sql<Report>`
       SELECT r.*, c.label as cycle_label
       FROM reports r

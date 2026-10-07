@@ -4,6 +4,9 @@ import { requireAdmin } from '@/lib/auth'
 
 export async function GET() {
   try {
+    if (!(await requireAdmin())) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
     const settings = await getAllSettings()
     return NextResponse.json({ settings })
   } catch (err) {
