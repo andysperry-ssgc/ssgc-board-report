@@ -11,6 +11,20 @@ function draftKey(cycleId: number | null) {
   return `report_draft_${cycleId ?? 'none'}`
 }
 
+// Explain a failed admin request; an expired login (401) gets recovery steps
+// that keep the current tab (and its unsaved text) intact.
+async function failureMessage(res: Response, action: string): Promise<string> {
+  if (res.status === 401) {
+    return `${action} failed because your login has expired. Log in again in a new tab, then come back to this tab and try again — don't refresh it.`
+  }
+  let reason = ''
+  try {
+    const data = await res.json()
+    if (data?.error) reason = `: ${data.error}`
+  } catch { /* non-JSON error body */ }
+  return `${action} failed (error ${res.status}${reason}).`
+}
+
 function GeneratePageInner() {
   const searchParams = useSearchParams()
   const urlCycleId = searchParams.get('cycle_id') ? Number(searchParams.get('cycle_id')) : null
@@ -31,6 +45,7 @@ function GeneratePageInner() {
   const [hasDraft, setHasDraft] = useState(false)
   const [draftStatus, setDraftStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null)
+  const [draftError, setDraftError] = useState('')
   const [manualEdit, setManualEdit] = useState(false)
   const [editingMember, setEditingMember] = useState<string | null>(null)
 
@@ -61,9 +76,14 @@ function GeneratePageInner() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cycle_id: cycleId, content: text }),
       })
-      if (!res.ok) throw new Error('Failed to save draft')
+      if (!res.ok) {
+        const message = await failureMessage(res, 'Saving the draft')
+        if (activeCycle.current === cycleId) { setDraftError(message); setDraftStatus('error') }
+        return false
+      }
       const data = await res.json()
       if (activeCycle.current === cycleId) {
+        setDraftError('')
         persisted.current = text
         setDraftSavedAt(data.updated_at ?? new Date().toISOString())
         setDraftStatus('saved')
@@ -71,7 +91,10 @@ function GeneratePageInner() {
       }
       return true
     } catch {
-      if (activeCycle.current === cycleId) setDraftStatus('error')
+      if (activeCycle.current === cycleId) {
+        setDraftError("Saving the draft failed because the server couldn't be reached. Check your connection.")
+        setDraftStatus('error')
+      }
       return false
     }
   }
@@ -212,7 +235,7 @@ function GeneratePageInner() {
     if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null }
     try {
       const res = await fetch(`/api/drafts?cycle_id=${selectedCycleId}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error()
+      if (!res.ok) { setError(await failureMessage(res, 'Discarding the draft')); return }
     } catch {
       setError('Could not discard the draft. Please try again.')
       return
@@ -233,6 +256,7 @@ function GeneratePageInner() {
       })
       // The response may be a non-JSON platform error page (e.g. a timeout), so
       // read it as text and parse defensively rather than assuming JSON.
+      if (res.status === 401) throw new Error(await failureMessage(res, 'Generating the report'))
       const raw = await res.text()
       let data: { content?: string; truncated?: boolean; error?: string } = {}
       try {
@@ -271,7 +295,7 @@ function GeneratePageInner() {
           source: 'generated',
         }),
       })
-      if (!res.ok) throw new Error('Failed to save')
+      if (!res.ok) throw new Error(await failureMessage(res, 'Saving to the archive'))
       const data = await res.json()
       if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null }
       persisted.current = content
@@ -462,7 +486,7 @@ function GeneratePageInner() {
                     <p className="text-gray-500">Saving draft…</p>
                   ) : draftStatus === 'error' ? (
                     <p className="text-red-600">
-                      Couldn&apos;t save the draft. Keep this tab open.{' '}
+                      {draftError || 'Saving the draft failed.'} Keep this tab open.{' '}
                       <button
                         onClick={() => selectedCycleId && putDraft(selectedCycleId, content)}
                         className="underline hover:text-red-800"

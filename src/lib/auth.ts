@@ -20,7 +20,22 @@ export async function getSession() {
 
 export async function requireAdmin(): Promise<boolean> {
   const session = await getSession()
-  return session.isAdmin === true
+  if (session.isAdmin !== true) return false
+  await renewSession(session)
+  return true
+}
+
+/**
+ * Re-issue the session cookie so its 14-day lifetime restarts from now. Sessions
+ * otherwise expire 14 days after login regardless of use — which lands right on
+ * the biweekly report cycle. Only works where cookies are writable (API routes).
+ */
+export async function renewSession(session: Awaited<ReturnType<typeof getSession>>): Promise<void> {
+  try {
+    await session.save()
+  } catch {
+    // Renewal is best-effort; never fail the request over it.
+  }
 }
 
 export function getAdminPassword(): string {

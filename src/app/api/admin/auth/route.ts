@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getIronSession } from 'iron-session'
 import { cookies } from 'next/headers'
-import { sessionOptions, getAdminPassword } from '@/lib/auth'
+import { sessionOptions, getAdminPassword, renewSession } from '@/lib/auth'
 import type { AdminSession } from '@/types'
 
 export async function POST(req: NextRequest) {
@@ -42,7 +42,10 @@ export async function DELETE() {
 export async function GET() {
   try {
     const session = await getIronSession<AdminSession>(await cookies(), sessionOptions)
-    return NextResponse.json({ isAdmin: session.isAdmin === true })
+    const isAdmin = session.isAdmin === true
+    // Checked on every admin page load — renew so active use keeps you signed in.
+    if (isAdmin) await renewSession(session)
+    return NextResponse.json({ isAdmin })
   } catch {
     return NextResponse.json({ isAdmin: false })
   }
